@@ -1,0 +1,245 @@
+{
+  "catalog_revision": 2,
+  "version": 1,
+  "roots": {
+    "user_data": "",
+    "shared_data": "",
+    "fl_install": ""
+  },
+  "destinations": [
+    {
+      "id": "piano",
+      "name": "Piano Roll scripts",
+      "extensions": [
+        ".pyscript"
+      ],
+      "root": "user_data",
+      "path": "Settings/Piano roll scripts",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "zge",
+      "name": "ZGameEditor objects (.zgeproj)",
+      "extensions": [
+        ".zgeproj"
+      ],
+      "root": "shared_data",
+      "path": "ZGameEditor Visualizer/Effects",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "visualizer",
+      "name": "Visualizer plugin presets",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/ZGameEditor Visualizer",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "generator",
+      "name": "Generator presets",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "absolute",
+      "path": "",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "effect",
+      "name": "Effect presets",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "absolute",
+      "path": "",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "samples",
+      "name": "Samples (choose an organization folder)",
+      "extensions": [
+        ".wav",
+        ".aif",
+        ".aiff",
+        ".mp3",
+        ".ogg",
+        ".flac"
+      ],
+      "root": "absolute",
+      "path": "",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "midi",
+      "name": "MIDI files (choose a folder)",
+      "extensions": [
+        ".mid",
+        ".midi"
+      ],
+      "root": "absolute",
+      "path": "",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "projects",
+      "name": "FL Studio projects (choose a folder)",
+      "extensions": [
+        ".flp",
+        ".zip"
+      ],
+      "root": "absolute",
+      "path": "",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-autogun",
+      "name": "Autogun",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Autogun",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-directwave",
+      "name": "DirectWave",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/DirectWave",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-harmless",
+      "name": "Harmless",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Harmless",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-harmor",
+      "name": "Harmor",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Harmor",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-kepler-exo",
+      "name": "Kepler EXO",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Kepler Exo",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-minisynth",
+      "name": "MiniSynth",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/MiniSynth",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-ogun",
+      "name": "Ogun",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Ogun",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-patcher",
+      "name": "Patcher",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/Patcher",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-poizone",
+      "name": "PoiZone",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/PoiZone",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-sytrus",
+      "name": "Sytrus",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Sytrus",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-transistor-bass",
+      "name": "Transistor Bass",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Transistor Bass",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-wave-candy",
+      "name": "Wave Candy",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/Wave Candy",
+      "enabled": true,
+      "automatic": true
+    }
+  ],
+  "last_selection": "auto",
+  "zip_limits": {
+    "entries": 10000,
+    "bytes": 2147483648,
+    "ratio": 200
+  },
+  "always_replace_duplicates": false
+}

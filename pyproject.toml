@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fldropper"
+version = "0.1.0"
+description = "Copy FL Studio content into configured destinations"
+requires-python = ">=3.12"
+dependencies = ["PySide6>=6.8,<7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+fldropper = "fldropper.ui:main"
+
+[tool.setuptools.packages.find]
+include = ["fldropper*"]
+
+[tool.setuptools.package-data]
+fldropper = ["assets/*.ico", "assets/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,34 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+config.json
+*.log
+.coverage
+.coverage.*
+htmlcov/
+
+# Local development, research, and sample content (not needed to run the app)
+/tests/
+/reports/
+/tools/
+/sample-fst/
+/AGENTS.md
+/FST_FORMAT.md
+
+# Original artwork copies; runtime assets live in fldropper/assets/ and ARE included
+/FL_Dropper.ico
+/FL_Dropper.png
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
