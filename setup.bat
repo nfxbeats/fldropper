@@ -8,7 +8,7 @@ if exist ".venv\Scripts\python.exe" goto install
 if exist ".venv" (
     echo The .venv folder exists but has no Windows Python interpreter.
     echo Rename it and run setup.bat again to create a Windows environment.
-    goto finish
+    goto finish 
 )
 
 py -3 -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
