@@ -10,6 +10,28 @@ import struct
 MAX_PREFIX = 64 * 1024
 
 
+def _has_version_banner(data: bytes, cursor: int, end: int) -> bool:
+    """Validate the length-prefixed UTF-16 banner at an event boundary."""
+    length = 0
+    for shift in range(0, 35, 7):
+        if cursor >= end:
+            return False
+        value = data[cursor]
+        cursor += 1
+        length |= (value & 0x7f) << shift
+        if not value & 0x80:
+            break
+    else:
+        return False
+    if length > 512 or length % 2 or cursor + length > end:
+        return False
+    try:
+        banner = data[cursor:cursor + length].decode("utf-16-le")
+    except UnicodeError:
+        return False
+    return re.fullmatch(r"FL Studio \d+(?:\.\d+)+\x00", banner) is not None
+
+
 @dataclass(frozen=True)
 class FstMetadata:
     plugin_name: str | None = None
@@ -48,11 +70,12 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                 return unknown("Reached opaque plugin state before outer plugin name")
             if event < 192:
                 length = 1 if event < 64 else 2 if event < 128 else 4
-                if event == 172 and version[:3] in ((25, 2, 4), (25, 2, 5)):
-                    # Measured in five presets: AC 01 01 00 C0. C0 starts the
-                    # length-prefixed version banner, not a fourth payload byte.
-                    if data[cursor:cursor + 4] != b"\x01\x01\x00\xc0":
-                        return unknown("Unrecognized FL 25.2 event-172 layout")
+                if event == 172 and data[cursor:cursor + 4] == b"\x01\x01\x00\xc0":
+                    # Recognize the observed three-byte layout by its framing,
+                    # independent of the FL release. Require a valid banner so
+                    # an ordinary four-byte payload is not silently shortened.
+                    if not _has_version_banner(data, cursor + 4, end):
+                        return unknown("Invalid event-172 version banner")
                     length = 3
             else:
                 length = 0
