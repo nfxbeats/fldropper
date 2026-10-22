@@ -37,6 +37,7 @@ fi
     fail "The local environment needs Python 3.12 or newer. Rename .venv and rerun setup.command." "${1:-}"
 .venv/bin/python -m pip install . ||
     fail "Installation failed. Check the error above and your internet connection, then rerun setup.command." "${1:-}"
-chmod +x setup.command run.command || fail "Could not mark the launch scripts executable." "${1:-}"
-printf '\n%s\n' "Setup complete. Double-click run.command to open FL Dropper."
+chmod +x setup.command run.command "FL Dropper.app/Contents/MacOS/FLDropper" ||
+    fail "Could not mark the launch scripts executable. Keep FL Dropper.app in this folder and rerun setup." "${1:-}"
+printf '\n%s\n' "Setup complete. Double-click FL Dropper.app to open FL Dropper without Terminal."
 pause_if_needed "${1:-}"

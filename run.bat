@@ -10,7 +10,11 @@ if errorlevel 1 (
     echo The local Python environment needs repair. Run setup.bat first.
     goto failed
 )
-".venv\Scripts\python.exe" -m fldropper
+if not exist ".venv\Scripts\pythonw.exe" (
+    echo The local windowed Python interpreter is missing. Run setup.bat first.
+    goto failed
+)
+start "" ".venv\Scripts\pythonw.exe" -m fldropper
 if errorlevel 1 goto failed
 popd
 exit /b 0

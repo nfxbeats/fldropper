@@ -1,0 +1,37 @@
+#!/bin/bash
+# A lightweight Finder launcher; keep the bundle beside the app's .venv.
+set -u
+
+show_error() {
+    /usr/bin/osascript - "$1" <<'APPLESCRIPT'
+on run argv
+    display alert "FL Dropper" message (item 1 of argv) as critical buttons {"OK"} default button "OK"
+end run
+APPLESCRIPT
+}
+
+if ! cd "$(dirname "$0")/../../.."; then
+    show_error "The FL Dropper folder could not be opened. Keep this launcher in the downloaded app folder."
+    exit 1
+fi
+if [[ ! -x .venv/bin/python ]]; then
+    show_error "Run bash setup.command in the FL Dropper folder first. Keep FL Dropper.app beside setup.command and the .venv folder."
+    exit 1
+fi
+
+log_file="${HOME}/Library/Logs/FLDropper.log"
+if ! mkdir -p "$(dirname "$log_file")" || ! : > "$log_file"; then
+    show_error "Could not create the launch log in Library/Logs. Use bash run.command in Terminal to see startup messages."
+    exit 1
+fi
+if ! .venv/bin/python -c 'import sys; assert sys.version_info >= (3, 12); import PySide6' >> "$log_file" 2>&1; then
+    show_error "The Python environment needs repair. Run bash setup.command again. Details are in ~/Library/Logs/FLDropper.log."
+    exit 1
+fi
+
+.venv/bin/python -m fldropper >> "$log_file" 2>&1
+app_status=$?
+if [[ "$app_status" -ne 0 ]]; then
+    show_error "FL Dropper exited with an error. See ~/Library/Logs/FLDropper.log, or use bash run.command in Terminal."
+fi
+exit "$app_status"

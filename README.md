@@ -66,7 +66,7 @@ Close FL Dropper, update or replace the downloaded app files, and run **setup.ba
 ## Troubleshooting
 
 - **Python is missing or too old:** install Python 3.12 or newer, then rerun setup.
-- **The app will not start:** run setup again and check the messages in the launcher window.
+- **The app will not start:** run setup again. On Windows, check any messages in the launcher window. On macOS, use `bash run.command` in Terminal to see errors, or check `~/Library/Logs/FLDropper.log`.
 - **Auto Detect finds nothing:** browse to your folders in Settings. Automatic discovery is optional.
 - **A preset is not recognized:** choose its destination manually. Not every preset format can be identified automatically.
 - **Access denied:** check the destination shown in the error. Choose a writable user-data location where appropriate; FL Studio's program folder may be protected.
@@ -74,7 +74,7 @@ Close FL Dropper, update or replace the downloaded app files, and run **setup.ba
 
 ## macOS (experimental)
 
-macOS launch scripts are included, but the app has not been verified on macOS. Automatic folder discovery and installation-folder validation currently support Windows only. Use manually selected user-data folders or absolute destinations.
+macOS launchers are included, but the app has not been verified on macOS. Automatic folder discovery and installation-folder validation currently support Windows only. Use manually selected user-data folders or absolute destinations.
 
 Install Python 3.12 or newer, open Terminal in the extracted app folder, and run:
 
@@ -82,7 +82,9 @@ Install Python 3.12 or newer, open Terminal in the extracted app folder, and run
 bash setup.command
 ```
 
-After setup, double-click **run.command**, or launch it from Terminal with:
+After setup, double-click **FL Dropper.app** to open the app without a Terminal window. Keep it inside the downloaded folder beside `setup.command`; it uses the Python environment created there. To put a shortcut elsewhere, create a Finder alias rather than moving the app launcher.
+
+For troubleshooting, **run.command** still opens the app with Terminal messages:
 
 ```bash
 bash run.command
