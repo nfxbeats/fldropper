@@ -15,6 +15,11 @@ class ConfigError(ValueError):
     pass
 
 
+def default_config_path() -> Path:
+    """Keep each source-folder installation's settings beside its launchers."""
+    return Path(__file__).resolve().parent.parent / "config.json"
+
+
 @dataclass
 class Destination:
     id: str
@@ -192,6 +197,13 @@ def load(path: Path) -> Config:
                     content.name.casefold() == "fl studio" and
                     (content.parent / "ZGameEditor Visualizer").is_dir()):
                 config.roots["shared_data"] = str(content.parent)
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 3:
+            if not any(d.id == "preset-patcher-generator" for d in config.destinations):
+                config.destinations.extend(d for d in plugin_destinations() if d.id == "preset-patcher-generator")
+            for d in config.destinations:
+                if d.id == "preset-patcher" and d.name == "Patcher":
+                    d.name = "Patcher (Effect)"
             config.extra["catalog_revision"] = CATALOG_REVISION
         return config
     except (ValueError, TypeError, KeyError, OSError) as exc:

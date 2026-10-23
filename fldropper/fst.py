@@ -7,6 +7,10 @@ from pathlib import Path
 import re
 import struct
 
+from construct import ConstructError
+from pyflp._events import AsciiEvent, UnicodeEvent
+from pyflp.plugin import WrapperEvent, _WrapperFlags
+
 MAX_PREFIX = 64 * 1024
 
 
@@ -39,6 +43,7 @@ class FstMetadata:
     encoding: str | None = None
     name_offset: int | None = None
     reason: str = ""
+    plugin_kind: str | None = None
 
 
 def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
@@ -46,9 +51,15 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
     version_text = None
     version: tuple[int, ...] = ()
     encoding = None
+    plugin_name = None
+    name_offset = None
+    plugin_kind = None
 
     def unknown(reason: str) -> FstMetadata:
-        return FstMetadata(fl_version=version_text, encoding=encoding, reason=reason)
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, reason, plugin_kind)
+
+    def identified() -> FstMetadata:
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, plugin_kind=plugin_kind)
 
     try:
         if data[:4] != b"FLhd" or len(data) < 22:
@@ -67,6 +78,8 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
             event = data[cursor]
             cursor += 1
             if event == 213:
+                if plugin_name:
+                    return identified()
                 return unknown("Reached opaque plugin state before outer plugin name")
             if event < 192:
                 length = 1 if event < 64 else 2 if event < 128 else 4
@@ -99,6 +112,8 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                 version = tuple(int(part) for part in version_text.split("."))
                 encoding = "utf-16-le" if version[:2] >= (11, 5) else "ascii"
             if event == 201:
+                if plugin_name:
+                    return identified()  # Never replace the first outer identity.
                 if length < 2 or length > 512:
                     return unknown("Invalid plugin-name length")
                 raw = data[cursor:cursor + length]
@@ -106,14 +121,28 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                 terminator = b"\x00\x00" if selected_encoding == "utf-16-le" else b"\x00"
                 if not raw.endswith(terminator) or (selected_encoding == "utf-16-le" and length % 2):
                     return unknown("Invalid plugin-name termination or encoding")
-                name = raw[:-len(terminator)].decode(selected_encoding)
+                # Use PyFLP's text schema directly: its event-object constructor
+                # has an empty-Enum incompatibility with Python 3.12.
+                decoder = UnicodeEvent if selected_encoding == "utf-16-le" else AsciiEvent
+                name = decoder.STRUCT.parse(raw)
+                if "\x00" in raw[:-len(terminator)].decode(selected_encoding):
+                    return unknown("Plugin name contains embedded terminators")
                 if not name or not all(32 <= ord(c) < 127 for c in name):
                     return unknown("Plugin name contains unsupported/control characters")
-                return FstMetadata(name, version_text, selected_encoding, cursor)
+                plugin_name, name_offset, encoding = name, cursor, selected_encoding
+                if plugin_kind:
+                    return identified()
+            if event == 212 and length >= 18:
+                # PyFLP WrapperEvent: uint16 flags at payload offset 16;
+                # Generator is bit 4. Never inspect opaque plugin state.
+                flags = WrapperEvent.STRUCT.parse(data[cursor:cursor + length])["flags"]
+                plugin_kind = "generator" if flags & _WrapperFlags.Generator else "effect"
+                if plugin_name:
+                    return identified()
             cursor += length
-    except (ValueError, struct.error, UnicodeError):
+    except (ValueError, struct.error, UnicodeError, ConstructError):
         return unknown("Invalid binary or text metadata")
-    return unknown("No outer plugin name in metadata prefix")
+    return identified() if plugin_name else unknown("No outer plugin name in metadata prefix")
 
 
 def plugin_name_from_bytes(data: bytes, file_size: int | None = None) -> str | None:

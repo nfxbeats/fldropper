@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QSize, QStandardPaths, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QToolButton, QVBoxLayout, QWidget,
 )
 
-from .config import Config, ConfigError, Destination, default_config, load, parse, resolve, save
+from .config import Config, ConfigError, Destination, default_config, default_config_path, load, parse, resolve, save
 from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
 from .routing import compatible, fst_package_groups, matches_plugin, package_matches
@@ -25,16 +25,20 @@ from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative,
 
 STYLE = """
 QWidget { font-family: 'Segoe UI'; font-size: 10pt; }
-QPushButton, QComboBox, QLineEdit { padding: 7px; border: 1px solid #576071; border-radius: 5px; }
-QPushButton:hover { background: #384457; }
-QPushButton:focus, QComboBox:focus, QLineEdit:focus { border: 2px solid #95b9ff; }
-QPushButton#drop { background: #232e3c; border: 2px dashed #7693bd; font-size: 20pt; min-height: 160px; }
-QPushButton#drop:hover { background: #2b3c51; }
+QPushButton, QComboBox, QLineEdit { padding: 7px; border: 1px solid #626262; border-radius: 5px; }
+QPushButton:hover { background: #484848; }
+QPushButton:focus, QComboBox:focus, QLineEdit:focus { border: 2px solid #ffc15a; }
+QPushButton#drop { background: #2b2b2b; border: 2px dashed #ffc15a; font-size: 20pt; min-height: 160px; }
+QPushButton#drop:hover { background: #404040; }
 QLabel#title { font-size: 23pt; font-weight: 600; }
 QLabel#lastDrop { color: #ffc15a; font-size: 16pt; font-weight: 600; padding: 6px 0; }
-QLabel#muted { color: #b8c4d6; }
-QProgressBar { min-height: 20px; border: 1px solid #576071; }
-QProgressBar::chunk { background: #7aa7ef; }
+QPushButton#detectFolders { background: #ffc15a; color: #242424; font-weight: 600; }
+QPushButton#detectFolders:hover { background: #ffd083; }
+QPushButton#detectFolders:pressed { background: #e5a53c; }
+QPushButton#detectFolders:disabled { background: #786344; color: #d1c5b1; }
+QLabel#muted { color: #c2c2c2; }
+QProgressBar { min-height: 20px; border: 1px solid #626262; }
+QProgressBar::chunk { background: #ffc15a; }
 """
 
 
@@ -43,9 +47,9 @@ def open_path(path: Path) -> None:
 
 
 def folder_icon(add: bool = False) -> QIcon:
-    plus = '<path d="M14 11v7m-3.5-3.5h7" stroke="#8fdcff"/>' if add else ""
+    plus = '<path d="M14 11v7m-3.5-3.5h7" stroke="#ffc15a"/>' if add else ""
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'
-           '<g fill="none" stroke="#b8c4d6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+           '<g fill="none" stroke="#c2c2c2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
            '<path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7h18"/>'
            + plus + '</g></svg>')
     pixmap = QPixmap()
@@ -194,24 +198,28 @@ class Settings(QDialog):
         super().__init__(parent)
         self.setWindowTitle("FL Dropper settings")
         self.config, self.config_path = copy.deepcopy(config), config_path
+        if not self.config.roots["shared_data"] and self.config.roots["user_data"]:
+            self.config.roots["shared_data"] = str(Path(self.config.roots["user_data"]).parent)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.roots = {}
-        for key, label in [("user_data", "User Data Folder"), ("shared_data", "Shared User Data Folder"), ("fl_install", "FL Studio Install Folder")]:
+        for key, label in [("fl_install", "FL Studio Install Folder"), ("shared_data", "Shared User Data Folder")]:
             row = QHBoxLayout()
-            edit = QLineEdit(config.roots[key])
+            edit = QLineEdit(self.config.roots[key])
             self.roots[key] = edit
             browse = QPushButton("Browse…")
             browse.clicked.connect(lambda _, e=edit: self.browse(e))
             row.addWidget(edit, 1)
             row.addWidget(browse)
             form.addRow(label, row)
+        self.roots["user_data"] = QLabel()
+        self.roots["user_data"].setTextFormat(Qt.TextFormat.PlainText)
+        self.roots["user_data"].setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.roots["user_data"].setWordWrap(True)
+        form.addRow("User Data Folder", self.roots["user_data"])
         layout.addLayout(form)
-        note = QLabel("User Data Folder: select the FL Studio content folder containing Settings and Presets/Projects.\n"
-                      "Shared User Data Folder is its Image-Line parent, used for custom ZGE effects. Detection checks the registry first.")
-        note.setWordWrap(True)
-        layout.addWidget(note)
         detect = QPushButton("Auto detect folders")
+        detect.setObjectName("detectFolders")
         self.detect_button = detect
         detect.clicked.connect(self.detect)
         layout.addWidget(detect)
@@ -233,13 +241,6 @@ class Settings(QDialog):
             button.clicked.connect(action)
             row.addWidget(button)
         layout.addLayout(row)
-        self.limit_edits = {}
-        limits = QFormLayout()
-        for key, label in [("entries", "ZIP maximum entries"), ("bytes", "ZIP maximum expanded bytes"), ("ratio", "ZIP maximum compression ratio")]:
-            edit = QLineEdit(str(config.zip_limits[key]))
-            self.limit_edits[key] = edit
-            limits.addRow(label, edit)
-        layout.addLayout(limits)
         self.always_replace = QCheckBox("Always replace duplicate files (without prompting)")
         self.always_replace.setChecked(config.always_replace_duplicates)
         layout.addWidget(self.always_replace)
@@ -247,13 +248,16 @@ class Settings(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        for edit in self.roots.values():
-            edit.textChanged.connect(self.refresh)
+        for key in ("fl_install", "shared_data"):
+            self.roots[key].textChanged.connect(self.refresh)
         self.refresh()
         self.resize(880, 640)
 
     def sync_roots(self):
-        self.config.roots.update({key: edit.text().strip() for key, edit in self.roots.items()})
+        self.config.roots.update({key: self.roots[key].text().strip() for key in ("fl_install", "shared_data")})
+        shared = self.config.roots["shared_data"]
+        self.config.roots["user_data"] = str(Path(shared) / "FL Studio") if shared else ""
+        self.roots["user_data"].setText(self.config.roots["user_data"])
 
     def refresh(self):
         self.sync_roots()
@@ -307,6 +311,8 @@ class Settings(QDialog):
         labels = {"user_data": "User Data Folder", "shared_data": "Shared User Data Folder", "fl_install": "FL Studio Install Folder"}
         filled, missing = [], []
         for kind, edit in self.roots.items():
+            if kind == "user_data":
+                continue
             if edit.text().strip():
                 continue
             options = {}
@@ -395,9 +401,10 @@ class Settings(QDialog):
         try:
             self.config = load(self.config_path)
             for key, edit in self.roots.items():
-                edit.setText(self.config.roots[key])
-            for key, edit in self.limit_edits.items():
-                edit.setText(str(self.config.zip_limits[key]))
+                if key != "user_data":
+                    edit.blockSignals(True)
+                    edit.setText(self.config.roots[key])
+                    edit.blockSignals(False)
             self.always_replace.setChecked(self.config.always_replace_duplicates)
             self.refresh()
         except ConfigError as exc:
@@ -407,7 +414,6 @@ class Settings(QDialog):
         try:
             self.sync_roots()
             self.config.always_replace_duplicates = self.always_replace.isChecked()
-            self.config.zip_limits.update({k: int(e.text()) for k, e in self.limit_edits.items()})
             self.config = parse(self.config.to_dict())
             for key, value in self.config.roots.items():
                 if value:
@@ -572,7 +578,7 @@ class RoutingDialog(QDialog):
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = compatible(config, pkg.route_path, True, pkg.plugin_name) if pkg.plugin_name else []
+                suggested = compatible(config, pkg.route_path, True, pkg.plugin_name, pkg.plugin_kind) if pkg.plugin_name else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:
@@ -630,11 +636,11 @@ class MainWindow(QMainWindow):
     def __init__(self, config_path: Path | None = None):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setWindowTitle("FL Dropper from NFX @ Warbeats")
+        self.setWindowTitle("FL Dropper - Produced by NFX @ Warbeats")
         self.setWindowIcon(QIcon(str(WINDOW_ICON)))
         self.native_icons = WindowsIcons()
         self.destroyed.connect(self.native_icons.release)
-        self.config_path = config_path or Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)) / "config.json"
+        self.config_path = config_path if config_path is not None else default_config_path()
         self.config_error = ""
         try:
             self.config = load(self.config_path)
@@ -831,6 +837,65 @@ class MainWindow(QMainWindow):
             self.refresh()
             self.status.setText("Settings saved.")
 
+    def detect_missing_roots(self):
+        if self.config_error or self.worker or all(self.config.roots.get(k) for k in ("user_data", "shared_data", "fl_install")):
+            return
+        self.status.setText("Detecting FL Studio folders…")
+
+        def discover(_):
+            candidates = []
+            for kind, path, source in Settings.find_candidates():
+                try:
+                    validate_root(path, kind)
+                    if kind == "user_data" and not ((path / "Settings").is_dir() and
+                            any((path / name).is_dir() for name in ("Presets", "Projects"))):
+                        continue
+                    candidates.append((kind, path, source))
+                except (OSError, ValueError):
+                    pass
+            return candidates
+
+        self.start_worker(discover, self.missing_roots_detected)
+
+    def missing_roots_detected(self, candidates):
+        if isinstance(candidates, Exception):
+            self.status.setText("Folder detection failed. Choose folders in Settings.")
+            self.details.appendPlainText(str(candidates))
+            return
+        trial = copy.deepcopy(self.config)
+        filled, unresolved = [], []
+        labels = {"user_data": "User Data", "shared_data": "Shared User Data", "fl_install": "Install"}
+        for kind, label in labels.items():
+            if kind == "user_data":
+                continue
+            if trial.roots.get(kind):
+                continue
+            options = {str(path).casefold(): path for candidate_kind, path, _ in candidates if candidate_kind == kind}
+            if len(options) == 1:
+                trial.roots[kind] = str(next(iter(options.values())))
+                filled.append(label)
+            else:
+                unresolved.append(label)
+        if trial.roots.get("shared_data"):
+            derived = str(Path(trial.roots["shared_data"]) / "FL Studio")
+            if trial.roots.get("user_data") != derived:
+                trial.roots["user_data"] = derived
+                filled.append("User Data")
+        if filled:
+            try:
+                if self.config_path.exists():
+                    load(self.config_path)
+                save(trial, self.config_path)
+            except (ConfigError, OSError) as exc:
+                self.status.setText(f"Could not save detected folders: {exc}")
+                return
+            self.config = trial
+            self.refresh()
+        message = "Detected " + ", ".join(filled) + "." if filled else "No unique folder matches found."
+        if unresolved:
+            message += " Choose " + ", ".join(unresolved) + " in Settings."
+        self.status.setText(message)
+
     def choose_folder(self):
         if self.worker:
             return
@@ -927,7 +992,7 @@ class MainWindow(QMainWindow):
                     errors.append(f"Failed to inspect {path}: {exc}")
             names = list({p.plugin_name.casefold(): p.plugin_name for p in packages
                           if selection == "auto" and p.plugin_name and not any(
-                              matches_plugin(d, p.plugin_name) and d.accepts(p.route_path)
+                              matches_plugin(d, p.plugin_name, p.plugin_kind) and d.accepts(p.route_path)
                               for d in self.config.destinations)}.values())
             if names:
                 worker.progress.emit("Searching for preset folders for new plugins…")
@@ -939,7 +1004,7 @@ class MainWindow(QMainWindow):
         if self.last_dropped_path is not None:
             plugin = None
             if not isinstance(result, Exception):
-                names = list(dict.fromkeys(p.plugin_name for p in result[0]
+                names = list(dict.fromkeys((f"{p.plugin_name} ({p.plugin_kind.title()})" if p.plugin_name == "Patcher" and p.plugin_kind else p.plugin_name) for p in result[0]
                              if p.source == self.last_dropped_path and p.plugin_name))
                 plugin = ", ".join(names) or None
             self.last_drop_label.setText(f"{plugin or 'Plugin not identified'}: {self.last_dropped_path.name}")
@@ -953,7 +1018,8 @@ class MainWindow(QMainWindow):
         self.details.appendPlainText("\n".join(search.notes))
         for p in packages:
             if p.plugin_name:
-                self.details.appendPlainText(f"Identified plugin: {p.source.name} → {p.plugin_name}")
+                kind = f" ({p.plugin_kind.title()})" if p.plugin_kind else ""
+                self.details.appendPlainText(f"Identified plugin: {p.source.name} → {p.plugin_name}{kind}")
         skipped_plugins = set()
         self.set_busy(True)
         try:
@@ -998,7 +1064,7 @@ class MainWindow(QMainWindow):
                 if p.is_zip or p.source.is_dir():
                     review = True
                     break
-                choices = compatible(self.config, p.source, automatic=selection == "auto", plugin_name=p.plugin_name)
+                choices = compatible(self.config, p.source, automatic=selection == "auto", plugin_name=p.plugin_name, plugin_kind=p.plugin_kind)
                 if selection != "auto":
                     choices = [d for d in choices if d.id == selection]
                 if len(choices) != 1:
@@ -1088,15 +1154,15 @@ def create_application():
     app.setOrganizationName("FLDropper")
     app.setStyle("Fusion")
     palette = QPalette()
-    for role, color in [(QPalette.ColorRole.Window, "#1b222d"), (QPalette.ColorRole.WindowText, "#ecf1f9"),
-                        (QPalette.ColorRole.Base, "#141a23"), (QPalette.ColorRole.AlternateBase, "#252e3c"),
-                        (QPalette.ColorRole.Text, "#ecf1f9"), (QPalette.ColorRole.Button, "#293344"),
-                        (QPalette.ColorRole.ButtonText, "#ecf1f9"), (QPalette.ColorRole.Highlight, "#426da8"),
-                        (QPalette.ColorRole.HighlightedText, "#ffffff"), (QPalette.ColorRole.ToolTipBase, "#293344"),
-                        (QPalette.ColorRole.ToolTipText, "#ecf1f9")]:
+    for role, color in [(QPalette.ColorRole.Window, "#343434"), (QPalette.ColorRole.WindowText, "#eeeeee"),
+                        (QPalette.ColorRole.Base, "#272727"), (QPalette.ColorRole.AlternateBase, "#3c3c3c"),
+                        (QPalette.ColorRole.Text, "#eeeeee"), (QPalette.ColorRole.Button, "#404040"),
+                        (QPalette.ColorRole.ButtonText, "#eeeeee"), (QPalette.ColorRole.Highlight, "#75603c"),
+                        (QPalette.ColorRole.HighlightedText, "#ffffff"), (QPalette.ColorRole.ToolTipBase, "#404040"),
+                        (QPalette.ColorRole.ToolTipText, "#eeeeee")]:
         palette.setColor(role, QColor(color))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#8591a2"))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#8591a2"))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#919191"))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#919191"))
     app.setPalette(palette)
     app.setStyleSheet(STYLE)
     return app
@@ -1106,4 +1172,5 @@ def main():
     app = create_application()
     window = MainWindow()
     window.show()
+    window.detect_missing_roots()
     sys.exit(app.exec())

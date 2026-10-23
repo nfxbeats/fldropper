@@ -1,6 +1,6 @@
 # FL Dropper
 
-Author: **Nelson Fernandez Jr. (NFX @ Warbeats)**
+Producer: **Nelson Fernandez Jr. (NFX @ Warbeats)**
 
 Drop FL Studio presets, samples, scripts, projects, folders, or ZIP files into one small window and copy them to the right place. FL Dropper keeps your original files and archives unchanged.
 
@@ -17,7 +17,7 @@ Setup creates or refreshes a Windows desktop shortcut with the bundled FL Droppe
 
 ## First-time setup
 
-1. Open **Settings** and click **Auto detect folders**.
+1. On launch, FL Dropper automatically looks for missing folder settings and saves unique valid matches. Saved paths are kept; no detection dialog is shown. If a folder is missing or several matches exist, open **Settings** to choose it. You can also click **Auto detect folders** to retry.
 2. Check the detected folders. Empty fields are filled when there is one valid match; if several installations are found, choose the one you use. Saved folder choices are kept. You can also browse manually.
 3. Choose destinations for content you organize yourself, such as samples, MIDI files, and projects.
 4. Click **Save**.
@@ -26,9 +26,9 @@ The folder settings mean:
 
 | Setting | What to select |
 | --- | --- |
-| **User Data Folder** | Your FL Studio content folder, containing folders such as `Presets`, `Projects`, and `Settings`. |
-| **Shared User Data Folder** | The Image-Line parent folder shown in FL Studio's File settings. Custom ZGameEditor Visualizer effects use this location. |
 | **FL Studio Install Folder** | Your FL Studio program folder, containing `FL64.exe` and `Plugins`. |
+| **Shared User Data Folder** | The Image-Line parent folder shown in FL Studio's File settings. Custom ZGameEditor Visualizer effects use this location. |
+| **User Data Folder** | Read-only: the `FL Studio` subfolder inside Shared User Data. Updates automatically when you change the shared folder. |
 
 Prefer user-data destinations for your own presets so they carry over when you upgrade FL Studio. You only need to configure the folders used by your destinations.
 
@@ -39,6 +39,8 @@ Prefer user-data destinations for your own presets so they carry over when you u
 3. Review any destination choices or folder/ZIP import summary, then confirm.
 
 **Auto Detect** handles each loose file separately. Recognized `.fst` presets go to the matching plugin's configured folder. If the plugin or destination cannot be determined, FL Dropper asks you to choose.
+
+Patcher presets are identified as **Effect** or **Generator** and go to their respective `Effects/Patcher` or `Generators/Patcher` preset folders. Both destinations appear in Settings. If a preset does not include enough information to identify its type, you choose the destination.
 
 When a new plugin is recognized, FL Dropper looks for its folder and prefers your user-data location. A single matching user-data folder is remembered automatically. Otherwise, you can choose a suggested location, browse elsewhere, or create a new folder.
 
@@ -65,7 +67,15 @@ Use **Settings** to rename, edit, disable, or delete destinations and change the
 
 ## Update
 
-Close FL Dropper, update or replace the downloaded app files, and run **setup.bat** again. Then open **run.bat**. Your settings are saved separately from the app folder.
+Close FL Dropper, update or replace the downloaded app files, and run **setup.bat** again. Then open **run.bat**. Keep your `config.json` when updating to preserve settings.
+
+## Your settings
+
+Folders, custom destinations, and preferences are saved in **config.json in the app folder**, beside `run.bat` and `setup.command`. Each copy of FL Dropper has its own settings. A new directory starts fresh unless you copy an existing `config.json` into it.
+
+To reset a copy, close the app and rename its `config.json` as a backup. To move your settings to another copy, copy that file. **Settings → Open configuration** opens the configuration file after it has been saved. Keep the app in a writable folder.
+
+Settings from older versions stored under your user profile are not imported automatically. To keep them, copy the old `config.json` into the app folder before launching.
 
 ## Troubleshooting
 
@@ -74,7 +84,7 @@ Close FL Dropper, update or replace the downloaded app files, and run **setup.ba
 - **Auto Detect finds nothing:** browse to your folders in Settings. Automatic discovery is optional.
 - **A preset is not recognized:** choose its destination manually. Not every preset format can be identified automatically.
 - **Access denied:** check the destination shown in the error. Choose a writable user-data location where appropriate; FL Studio's program folder may be protected.
-- **A ZIP cannot be imported:** check that it opens normally and is not encrypted. Unsafe or oversized archives may be rejected; archive limits are available in Settings.
+- **A ZIP cannot be imported:** check that it opens normally and is not encrypted. Unsafe or oversized archives may be rejected.
 
 ## macOS (experimental)
 
@@ -95,3 +105,5 @@ bash run.command
 ```
 
 Rerun `bash setup.command` after updating the app.
+
+Plugin metadata decoding uses [PyFLP](https://github.com/demberto/PyFLP). Setup installs it automatically.

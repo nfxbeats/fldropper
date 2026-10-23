@@ -73,6 +73,8 @@ class Package:
     selected_files: list[Path] | None = None
     group_name: str | None = None
     is_fst_group: bool = False
+    plugin_kind: str | None = None
+    file_plugin_kinds: dict[Path, str | None] = field(default_factory=dict)
 
     @property
     def planned_files(self) -> list[Path]:
@@ -123,8 +125,9 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
         files = inspect_zip(source, limits, cancel)
         with zipfile.ZipFile(source) as archive:
             directories = [safe_relative(i.filename) for i in archive.infolist() if i.is_dir()]
-            from .fst import MAX_PREFIX, plugin_name_from_bytes
+            from .fst import MAX_PREFIX, inspect_bytes
             plugins = {}
+            kinds = {}
             metadata_bytes = 0
             for info in archive.infolist():
                 check_cancel(cancel)
@@ -135,12 +138,14 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
                     metadata_bytes += len(prefix)
                     if metadata_bytes > limits["bytes"]:
                         raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
-                    plugins[relative] = plugin_name_from_bytes(prefix, info.file_size)
-        return Package(source, files, is_zip=True, directories=directories, file_plugins=plugins)
+                    metadata = inspect_bytes(prefix, info.file_size)
+                    plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
+        return Package(source, files, is_zip=True, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds)
     if source.is_file():
         safe_relative(source.name)
-        from .fst import read_plugin_name
-        return Package(source, [Path(source.name)], plugin_name=read_plugin_name(source))
+        from .fst import inspect_file
+        metadata = inspect_file(source)
+        return Package(source, [Path(source.name)], plugin_name=metadata.plugin_name, plugin_kind=metadata.plugin_kind)
     if not source.is_dir():
         raise TransferError(f"Source is not a regular file or folder: {source}")
     files, skipped, directories = [], [], []
@@ -159,14 +164,16 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
             else:
                 skipped.append(f"{child}: special entry skipped")
     visit(source)
-    from .fst import read_plugin_name
+    from .fst import inspect_file
     plugins = {}
+    kinds = {}
     for relative in files:
         check_cancel(cancel)
         if relative.suffix.casefold() == ".fst":
             checked_ancestors(source / relative)
-            plugins[relative] = read_plugin_name(source / relative)
-    return Package(source, files, skipped, directories=directories, file_plugins=plugins)
+            metadata = inspect_file(source / relative)
+            plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
+    return Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds)
 
 
 def extract(package: Package, stage: Path, limits: dict[str, int], cancel: threading.Event,

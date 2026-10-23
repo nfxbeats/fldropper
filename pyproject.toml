@@ -7,7 +7,7 @@ name = "fldropper"
 version = "0.1.0"
 description = "Copy FL Studio content into configured destinations"
 requires-python = ">=3.12"
-dependencies = ["PySide6>=6.8,<7"]
+dependencies = ["PySide6>=6.8,<7", "PyFLP==2.2.1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]

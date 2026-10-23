@@ -13,14 +13,15 @@ def fst_package_groups(package: Package, *, split: bool = True) -> list[Package]
     other_primary = {".flp", ".pyscript", ".zgeproj", ".mid", ".midi"}
     companions = [p for p in package.files if p not in package.file_plugins and p.suffix.casefold() not in other_primary]
     remaining = [p for p in package.files if p not in package.file_plugins and p not in companions]
-    groups: dict[str, list[Path]] = {}
+    groups: dict[tuple[str, str | None], list[Path]] = {}
     names = {}
     for path, name in package.file_plugins.items():
-        key = name.casefold() if name else ""
+        kind = package.file_plugin_kinds.get(path) if name and name.casefold() == "patcher" else None
+        key = (name.casefold() if name else "", kind)
         groups.setdefault(key, []).append(path)
         names[key] = name
-    result = [replace(package, selected_files=paths + companions, plugin_name=names[key],
-                      group_name=names[key] or "Unidentified FST presets", is_fst_group=True)
+    result = [replace(package, selected_files=paths + companions, plugin_name=names[key], plugin_kind=key[1],
+                      group_name=(f"{names[key]} ({key[1].title()})" if key[1] else names[key]) or "Unidentified FST presets", is_fst_group=True)
               for key, paths in groups.items()]
     if remaining:
         result.append(replace(package, selected_files=remaining + companions, group_name="Other content"))
@@ -35,19 +36,27 @@ def plugin_destination_id(plugin_name: str | None) -> str | None:
     return names.get(plugin_name.casefold())
 
 
-def matches_plugin(dest: Destination, plugin_name: str) -> bool:
+def matches_plugin(dest: Destination, plugin_name: str, plugin_kind: str | None = None) -> bool:
     tag = dest.extra.get("plugin_name")
+    if plugin_name.casefold() == "patcher":
+        known = {"preset-patcher": "effect", "preset-patcher-generator": "generator"}
+        identity = dest.id in known or (isinstance(tag, str) and tag.casefold() == "patcher") or dest.name.casefold() in ("patcher", "patcher (effect)", "patcher (generator)")
+        kind = dest.extra.get("plugin_kind") or known.get(dest.id)
+        if not kind:
+            parts = dest.path.replace("\\", "/").casefold().split("/")
+            kind = "generator" if "generators" in parts else "effect" if "effects" in parts else None
+        return identity and (not plugin_kind or kind == plugin_kind)
     return (dest.id == plugin_destination_id(plugin_name) or
             (isinstance(tag, str) and tag.casefold() == plugin_name.casefold()) or
             dest.name.casefold() == plugin_name.casefold())
 
 
 def compatible(config: Config, path: Path, automatic: bool = False,
-               plugin_name: str | None = None) -> list[Destination]:
+               plugin_name: str | None = None, plugin_kind: str | None = None) -> list[Destination]:
     choices = [d for d in config.destinations if d.enabled and d.accepts(path)
             and (not automatic or (d.automatic and bool(d.extensions)))]
     if automatic and path.suffix.casefold() == ".fst" and plugin_name:
-        return [d for d in choices if matches_plugin(d, plugin_name)]
+        return [d for d in choices if matches_plugin(d, plugin_name, plugin_kind)]
     return choices
 
 

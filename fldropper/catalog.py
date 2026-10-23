@@ -12,11 +12,12 @@ PLUGIN_PRESETS = (
     ("kepler-exo", "Kepler EXO", "Generators", "Kepler Exo"),
     ("minisynth", "MiniSynth", "Generators", "MiniSynth"),
     ("ogun", "Ogun", "Generators", "Ogun"),
-    ("patcher", "Patcher", "Effects", "Patcher"),
+    ("patcher", "Patcher (Effect)", "Effects", "Patcher"),
+    ("patcher-generator", "Patcher (Generator)", "Generators", "Patcher"),
     ("poizone", "PoiZone", "Generators", "PoiZone"),
     ("sytrus", "Sytrus", "Generators", "Sytrus"),
     ("transistor-bass", "Transistor Bass", "Generators", "Transistor Bass"),
     ("wave-candy", "Wave Candy", "Effects", "Wave Candy"),
 )
 
-CATALOG_REVISION = 2
+CATALOG_REVISION = 3
