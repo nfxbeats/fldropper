@@ -75,14 +75,43 @@ class Package:
     is_fst_group: bool = False
     plugin_kind: str | None = None
     file_plugin_kinds: dict[Path, str | None] = field(default_factory=dict)
+    script_kind: str | None = None
+    has_scripts: bool = False
+    script_notes: list[str] = field(default_factory=list)
+    destination_subfolder: str | None = None
+    hardware_nested: bool = False
+    zip_root_folder: Path | None = None
+    fst_type: str | None = None
+    file_fst_types: dict[Path, str | None] = field(default_factory=dict)
 
     @property
     def planned_files(self) -> list[Path]:
         return self.files if self.selected_files is None else self.selected_files
 
     @property
+    def plugin_label(self) -> str:
+        label = self.plugin_name or ""
+        if self.plugin_name == "Patcher" and self.plugin_kind:
+            label += f" ({self.plugin_kind.title()})"
+        if label and self.fst_type == "channel":
+            label += " (Channel state)"
+        return label
+
+    @property
     def route_path(self) -> Path:
         return Path("preset.fst") if self.is_fst_group else self.source
+
+    @property
+    def folder_name(self) -> str:
+        return self.destination_subfolder or (self.source.stem if self.is_zip else self.source.name)
+
+    def extraction_target(self, base: Path) -> Path:
+        # The original archive paths already contain this enclosing folder.
+        # Copy them beneath base instead of prepending another wrapper.
+        return base if self.is_zip and self.zip_root_folder else base / self.folder_name
+
+    def displayed_target(self, base: Path) -> Path:
+        return base / self.zip_root_folder if self.is_zip and self.zip_root_folder else base / self.folder_name
 
 
 def inspect_zip(source: Path, limits: dict[str, int], cancel: threading.Event) -> list[Path]:
@@ -128,6 +157,9 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
             from .fst import MAX_PREFIX, inspect_bytes
             plugins = {}
             kinds = {}
+            fst_types = {}
+            scripts = {}
+            from .scripts import MAX_SCRIPT_BYTES, inspect_script, classify_scripts
             metadata_bytes = 0
             for info in archive.infolist():
                 check_cancel(cancel)
@@ -140,12 +172,32 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
                         raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
                     metadata = inspect_bytes(prefix, info.file_size)
                     plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
-        return Package(source, files, is_zip=True, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds)
+                    fst_types[relative] = metadata.fst_type
+                elif not info.is_dir() and relative.suffix.casefold() in (".py", ".pyscript"):
+                    with archive.open(info) as stream:
+                        prefix = stream.read(min(MAX_SCRIPT_BYTES + 1, info.file_size))
+                    metadata_bytes += len(prefix)
+                    if metadata_bytes > limits["bytes"]:
+                        raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
+                    scripts[relative] = inspect_script(prefix)
+        kind, notes = classify_scripts(scripts) if scripts else (None, [])
+        package = Package(source, files, is_zip=True, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds,
+                          has_scripts=bool(scripts), script_kind=kind, script_notes=notes, file_fst_types=fst_types)
+        top_levels = {path.parts[0] for path in [*files, *directories]}
+        if len(top_levels) == 1 and all(len(path.parts) > 1 for path in files):
+            package.zip_root_folder = Path(next(iter(top_levels)))
+        check_hardware_layout(package)
+        return package
     if source.is_file():
         safe_relative(source.name)
         from .fst import inspect_file
         metadata = inspect_file(source)
-        return Package(source, [Path(source.name)], plugin_name=metadata.plugin_name, plugin_kind=metadata.plugin_kind)
+        package = Package(source, [Path(source.name)], plugin_name=metadata.plugin_name, plugin_kind=metadata.plugin_kind, fst_type=metadata.fst_type)
+        if source.suffix.casefold() in (".py", ".pyscript"):
+            inspect_script_files(package)
+            if package.script_kind == "hardware":
+                package.destination_subfolder = source.stem[7:] or "Controller"
+        return package
     if not source.is_dir():
         raise TransferError(f"Source is not a regular file or folder: {source}")
     files, skipped, directories = [], [], []
@@ -167,13 +219,42 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
     from .fst import inspect_file
     plugins = {}
     kinds = {}
+    fst_types = {}
     for relative in files:
         check_cancel(cancel)
         if relative.suffix.casefold() == ".fst":
             checked_ancestors(source / relative)
             metadata = inspect_file(source / relative)
             plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
-    return Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds)
+            fst_types[relative] = metadata.fst_type
+    package = Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds, file_fst_types=fst_types)
+    inspect_script_files(package, cancel)
+    return package
+
+
+def inspect_script_files(package: Package, cancel: threading.Event | None = None) -> None:
+    from .scripts import MAX_SCRIPT_BYTES, inspect_script, classify_scripts
+    scripts = {}
+    for relative in package.planned_files:
+        if cancel:
+            check_cancel(cancel)
+        if relative.suffix.casefold() in (".py", ".pyscript"):
+            path = package.source / relative if package.source.is_dir() else package.source
+            checked_ancestors(path)
+            with path.open("rb") as stream:
+                scripts[relative] = inspect_script(stream.read(MAX_SCRIPT_BYTES + 1))
+    package.has_scripts = bool(scripts)
+    if scripts:
+        package.script_kind, package.script_notes = classify_scripts(scripts)
+        check_hardware_layout(package)
+
+
+def check_hardware_layout(package: Package) -> None:
+    entries = [p for p in package.planned_files if p.suffix.casefold() == ".py" and p.name.casefold().startswith("device_")]
+    root = package.zip_root_folder or Path()
+    package.hardware_nested = bool(entries) and any(p.parent != root for p in entries)
+    if package.hardware_nested:
+        package.script_notes.append("Hardware entry points are inside subfolders. Extract the ZIP if necessary and drop each device_ file's containing folder, so it is installed as one controller folder.")
 
 
 def extract(package: Package, stage: Path, limits: dict[str, int], cancel: threading.Event,

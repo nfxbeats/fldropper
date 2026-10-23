@@ -10,6 +10,7 @@ import struct
 from construct import ConstructError
 from pyflp._events import AsciiEvent, UnicodeEvent
 from pyflp.plugin import WrapperEvent, _WrapperFlags
+from pyflp.project import FileFormat
 
 MAX_PREFIX = 64 * 1024
 
@@ -44,6 +45,7 @@ class FstMetadata:
     name_offset: int | None = None
     reason: str = ""
     plugin_kind: str | None = None
+    fst_type: str | None = None
 
 
 def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
@@ -54,19 +56,22 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
     plugin_name = None
     name_offset = None
     plugin_kind = None
+    fst_type = None
 
     def unknown(reason: str) -> FstMetadata:
-        return FstMetadata(plugin_name, version_text, encoding, name_offset, reason, plugin_kind)
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, reason, plugin_kind, fst_type)
 
     def identified() -> FstMetadata:
-        return FstMetadata(plugin_name, version_text, encoding, name_offset, plugin_kind=plugin_kind)
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, plugin_kind=plugin_kind, fst_type=fst_type)
 
     try:
         if data[:4] != b"FLhd" or len(data) < 22:
             return unknown("Missing or truncated FLhd header")
         header_size = struct.unpack_from("<I", data, 4)[0]
-        if header_size != 6 or data[8:10] != b"\x30\x00":
+        file_format = struct.unpack_from("<H", data, 8)[0]
+        if header_size != 6 or file_format not in (FileFormat.PluginState, FileFormat.ChannelState):
             return unknown("Unsupported header size or non-plugin-preset format")
+        fst_type = "channel" if file_format == FileFormat.ChannelState else "plugin"
         if data[14:18] != b"FLdt":
             return unknown("Missing FLdt event chunk")
         size = struct.unpack_from("<I", data, 18)[0]

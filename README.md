@@ -42,16 +42,36 @@ Prefer user-data destinations for your own presets so they carry over when you u
 
 Patcher presets are identified as **Effect** or **Generator** and go to their respective `Effects/Patcher` or `Generators/Patcher` preset folders. Both destinations appear in Settings. If a preset does not include enough information to identify its type, you choose the destination.
 
-When a new plugin is recognized, FL Dropper looks for its folder and prefers your user-data location. A single matching user-data folder is remembered automatically. Otherwise, you can choose a suggested location, browse elsewhere, or create a new folder.
+FPC kits use `Presets/Plugin presets/Generators/FPC` inside User Data Folder. The preset and its accompanying samples are copied together into the kit folder.
+
+FST headers distinguish **channel states** from **plugin presets**. **3x Osc channel states** are an exception to the User Data preference: they go to `Data/Patches/Channel presets/3x Osc` inside FL Studio Install Folder. The detected channel-state type appears in the highlighted filename and import details. Installation-folder permissions may prevent copying; the app reports the failing path.
+
+When a new plugin is recognized, FL Dropper looks for its folder in User Data first. A single matching user-data folder is remembered automatically. Otherwise, the location dialog defaults to a User Data folder, offering to create it even if a matching installation folder already exists. You can explicitly choose an installation folder or browse elsewhere. New destinations in Settings also default to User Data.
 
 The highlighted text shows the last dropped filename and plugin. The status line reports the results; click its caret to see individual file details. Use the **folder icon** to open the destination.
 
 ### Folders and ZIP files
 
 - In **Auto Detect**, `.fst` presets are grouped by plugin, including presets in subfolders. Companion files such as samples and images are copied with each plugin group, keeping their relative paths.
-- Each destination receives a folder named after the dropped folder or ZIP archive.
+- Each destination receives a folder named after the dropped folder or ZIP archive. If a ZIP already has one enclosing folder containing everything, that folder is reused without adding a second ZIP-name folder.
 - To keep a package together in one place, select a destination before dropping it. For a general mixed package, use a custom destination that accepts any file.
 - ZIP archives containing an FL Studio project offer **Keep ZIP as file**. Nested ZIP archives are not unpacked automatically.
+
+### Scripts and helper files
+
+Auto Detect reads script imports without running them:
+
+| Script type | Recognized by | Destination inside User Data Folder |
+| --- | --- | --- |
+| [Piano Roll](https://il-group.github.io/FL-Studio-API-Stubs/piano_roll_scripting/) | A `.pyscript` importing `flpianoroll`, directly or through a supplied helper | `Settings/Piano roll scripts` |
+| [Edison / Slicex](https://il-group.github.io/FL-Studio-API-Stubs/edison_scripting/) | A `.pyscript` importing `enveditor`, directly or through a supplied helper | `Settings/Audio scripts` |
+| [MIDI hardware](https://il-group.github.io/FL-Studio-API-Stubs/midi_controller_scripting/script_files/) | A `device_*.py` entry point | `Settings/Hardware/<script folder>` |
+
+Drop the complete script folder or ZIP to include its `.py` helpers and resources. Script packages stay together, preserving internal paths. If you drop loose script files together from the same folder, only those selected files are grouped and copied; other files beside them are not included automatically.
+
+Unidentified scripts, helpers without an entry point, and packages containing different script types require a destination choice. Import separate script folders individually when they need different destinations. Review dependency notes in the import summary or expandable details; external and dynamic imports cannot be fully verified.
+
+Hardware entry points must be directly inside their controller folder. ZIPs with a single enclosing controller folder are handled automatically. For deeper nesting or multiple controller folders, extract the ZIP and drop each folder containing `device_*.py`. FL Dropper flags these deeper layouts rather than automatically installing them at the wrong depth.
 
 ### Duplicate filenames
 

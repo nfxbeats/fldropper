@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from .config import Config, ConfigError, Destination, default_config, default_config_path, load, parse, resolve, save
 from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
-from .routing import compatible, fst_package_groups, matches_plugin, package_matches
+from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts
 from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative, scan, validate_target
 
 
@@ -372,7 +372,7 @@ class Settings(QDialog):
         super().done(result)
 
     def add(self):
-        editor = DestinationEditor(self.config, Destination(str(uuid.uuid4()), "Custom destination", [], automatic=False), self)
+        editor = DestinationEditor(self.config, Destination(str(uuid.uuid4()), "Custom destination", [], root="user_data", automatic=False), self)
         if editor.exec():
             self.config.destinations.append(editor.dest)
             self.refresh()
@@ -432,35 +432,52 @@ class Settings(QDialog):
 
 
 class PluginLocationDialog(QDialog):
-    def __init__(self, config: Config, plugin_name: str, candidates: list[Candidate], parent=None):
+    def __init__(self, config: Config, plugin_name: str, candidates: list[Candidate], parent=None, *, plugin_kind: str | None = None):
         super().__init__(parent)
         self.setWindowTitle(f"Add location for {plugin_name}")
         self.path = None
         self.base = None
         layout = QVBoxLayout(self)
-        note = QLabel(f"New plugin detected: {plugin_name}\nChoose its preset folder. User-data matches are preferred over installation folders.")
+        note = QLabel(f"New plugin detected: {plugin_name}\nUser Data is preferred so presets remain available after FL Studio upgrades. Choose an installation folder only if needed.")
         note.setTextFormat(Qt.TextFormat.PlainText)
         note.setWordWrap(True)
         layout.addWidget(note)
         self.choices = QComboBox()
         self.choices.setMinimumContentsLength(35)
         self.choices.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        for candidate in candidates:
-            base = next((Path(config.roots[k]) for k in ("user_data", "shared_data", "fl_install")
-                         if config.roots.get(k) and candidate.path.is_relative_to(Path(config.roots[k]))), candidate.path)
-            self.choices.addItem(f"{candidate.source}: {candidate.path}", (base, candidate.path))
-            self.choices.setItemData(self.choices.count() - 1, str(candidate.path), Qt.ItemDataRole.ToolTipRole)
+        user_root = Path(config.roots["user_data"]) if config.roots.get("user_data") else None
+        user_candidates = [c for c in candidates if user_root and c.path.is_relative_to(user_root)]
+        others = [c for c in candidates if c not in user_candidates]
+        seen = set()
+
+        def add_choice(label, base, path):
+            if str(path).casefold() in seen:
+                return
+            seen.add(str(path).casefold())
+            self.choices.addItem(f"{label}: {path}", (base, path))
+            self.choices.setItemData(self.choices.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole)
+
+        for candidate in user_candidates:
+            add_choice("User Data (preferred)", user_root, candidate.path)
         try:
             relative = safe_relative(plugin_name)
             if len(relative.parts) == 1 and config.roots.get("user_data"):
                 base = Path(config.roots["user_data"])
                 if base.is_dir():
-                    for category in ("Generators", "Effects"):
+                    categories = ("Effects", "Generators") if plugin_kind == "effect" else ("Generators", "Effects")
+                    for category in categories:
                         path = base / "Presets/Plugin presets" / category / relative
-                        self.choices.addItem(f"New user-data {category.lower()} preset folder", (base, path))
+                        add_choice(f"User Data {category.lower()} (preferred)", base, path)
         except ValueError:
             pass
+        preferred_count = self.choices.count()
+        for candidate in others:
+            base = next((Path(config.roots[k]) for k in ("shared_data", "fl_install")
+                         if config.roots.get(k) and candidate.path.is_relative_to(Path(config.roots[k]))), candidate.path)
+            add_choice(candidate.source, base, candidate.path)
         self.choices.addItem("Other… browse for a folder", None)
+        if not preferred_count:
+            self.choices.setCurrentIndex(self.choices.count() - 1)
         layout.addWidget(self.choices)
         self.path_status = QLabel()
         self.path_status.setTextFormat(Qt.TextFormat.PlainText)
@@ -497,7 +514,7 @@ class PluginLocationDialog(QDialog):
             "Add location and copy" if found else "Create folder, add location and copy")
 
     def browse(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choose plugin preset folder or parent for a new folder")
+        folder = QFileDialog.getExistingDirectory(self, "Choose plugin preset folder or parent for a new folder", self.path_edit.text())
         if folder:
             self.choices.setCurrentIndex(self.choices.count() - 1)
             self.base = Path(folder)
@@ -563,6 +580,10 @@ class RoutingDialog(QDialog):
                 for d in config.destinations:
                     if not d.enabled or (explicit and d.id != explicit.id):
                         continue
+                    if pkg.hardware_nested and (d.id == "hardware" or d.extra.get("script_type") == "hardware"):
+                        continue
+                    if pkg.has_scripts and pkg.script_kind and d.id in ("piano", "edison", "hardware") and d.id != pkg.script_kind:
+                        continue
                     if keep:
                         ok = d.accepts(pkg.source) and (not d.extensions or (".flp" in d.extensions and any(f.suffix.casefold() == ".flp" for f in pkg.files)))
                     elif pkg.is_zip or pkg.source.is_dir():
@@ -573,17 +594,19 @@ class RoutingDialog(QDialog):
                         try:
                             _, target = resolve(config, d)
                             if (pkg.is_zip or pkg.source.is_dir()) and not keep:
-                                target /= pkg.source.stem if pkg.is_zip else pkg.source.name
+                                target = pkg.displayed_target(target)
+                            elif pkg.destination_subfolder:
+                                target /= pkg.destination_subfolder
                             combo.addItem(f"{d.name} → {target}", d.id)
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = compatible(config, pkg.route_path, True, pkg.plugin_name, pkg.plugin_kind) if pkg.plugin_name else []
+                suggested = package_choices(config, pkg) if pkg.plugin_name or pkg.has_scripts else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:
                     combo.setCurrentIndex(index)
-                elif combo.count() == 2:
+                elif combo.count() == 2 and not (pkg.has_scripts and not pkg.script_kind and not explicit):
                     combo.setCurrentIndex(1)
             mode.currentIndexChanged.connect(populate)
             populate(0)
@@ -602,6 +625,9 @@ class RoutingDialog(QDialog):
                     problems.append(f"{p.source.name}: incompatible with {explicit.name}. Compatible: " +
                                     (", ".join(d.name for d in suggestions) or "manual accept-any destination"))
             self.summary.setText("\n".join(problems))
+        script_notes = [f"{p.source.name}: {note}" for p in packages for note in p.script_notes]
+        if script_notes:
+            self.summary.setText("\n".join(filter(None, [self.summary.text(), *script_notes[:6]])))
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -623,7 +649,9 @@ class RoutingDialog(QDialog):
                 validate_root(root, d.root)
                 keep = p.is_zip and mode.currentData()
                 if p.source.is_dir() or (p.is_zip and not keep):
-                    target /= p.source.stem if p.is_zip else p.source.name
+                    target = p.extraction_target(target)
+                elif p.destination_subfolder:
+                    target /= p.destination_subfolder
                 validate_target(root, target)
                 jobs.append(Job(p, root, target, bool(keep)))
             self.jobs = jobs
@@ -902,7 +930,7 @@ class MainWindow(QMainWindow):
         if self.config_error:
             QMessageBox.warning(self, "Repair configuration first", self.config_error)
             return
-        folder = QFileDialog.getExistingDirectory(self, "Choose plugin destination folder")
+        folder = QFileDialog.getExistingDirectory(self, "Choose plugin destination folder", self.config.roots.get("user_data", ""))
         if not folder:
             return
         name, accepted = QInputDialog.getText(self, "Plugin name", "Plugin name for this location:")
@@ -990,9 +1018,10 @@ class MainWindow(QMainWindow):
                     raise
                 except Exception as exc:
                     errors.append(f"Failed to inspect {path}: {exc}")
+            packages = group_loose_scripts(packages, worker.cancel)
             names = list({p.plugin_name.casefold(): p.plugin_name for p in packages
                           if selection == "auto" and p.plugin_name and not any(
-                              matches_plugin(d, p.plugin_name, p.plugin_kind) and d.accepts(p.route_path)
+                              matches_plugin(d, p.plugin_name, p.plugin_kind, p.fst_type) and d.accepts(p.route_path)
                               for d in self.config.destinations)}.values())
             if names:
                 worker.progress.emit("Searching for preset folders for new plugins…")
@@ -1004,8 +1033,11 @@ class MainWindow(QMainWindow):
         if self.last_dropped_path is not None:
             plugin = None
             if not isinstance(result, Exception):
-                names = list(dict.fromkeys((f"{p.plugin_name} ({p.plugin_kind.title()})" if p.plugin_name == "Patcher" and p.plugin_kind else p.plugin_name) for p in result[0]
-                             if p.source == self.last_dropped_path and p.plugin_name))
+                from .scripts import SCRIPT_ROUTES
+                names = list(dict.fromkeys((p.plugin_label or SCRIPT_ROUTES.get(p.script_kind, "Script type not identified")) for p in result[0]
+                             if (p.source == self.last_dropped_path or
+                                 (p.source == self.last_dropped_path.parent and Path(self.last_dropped_path.name) in p.planned_files))
+                             and (p.plugin_name or p.has_scripts)))
                 plugin = ", ".join(names) or None
             self.last_drop_label.setText(f"{plugin or 'Plugin not identified'}: {self.last_dropped_path.name}")
             self.last_drop_label.setToolTip(self.last_drop_label.text())
@@ -1017,16 +1049,22 @@ class MainWindow(QMainWindow):
         self.details.setPlainText("\n".join(errors))
         self.details.appendPlainText("\n".join(search.notes))
         for p in packages:
+            if p.has_scripts:
+                from .scripts import SCRIPT_ROUTES
+                self.details.appendPlainText(f"Script type: {SCRIPT_ROUTES.get(p.script_kind, 'Needs destination choice')}")
+                self.details.appendPlainText("\n".join(p.script_notes))
             if p.plugin_name:
                 kind = f" ({p.plugin_kind.title()})" if p.plugin_kind else ""
-                self.details.appendPlainText(f"Identified plugin: {p.source.name} → {p.plugin_name}{kind}")
+                state = " — Channel state" if p.fst_type == "channel" else ""
+                self.details.appendPlainText(f"Identified plugin: {p.source.name} → {p.plugin_name}{kind}{state}")
         skipped_plugins = set()
         self.set_busy(True)
         try:
             for name, candidates in search.matches.items():
-                user_matches = [c for c in candidates if any(
-                    self.config.roots.get(kind) and c.path.is_relative_to(Path(self.config.roots[kind]))
-                    for kind in ("user_data", "shared_data"))]
+                kinds = {p.plugin_kind for p in packages if p.plugin_name == name and p.plugin_kind}
+                plugin_kind = next(iter(kinds)) if len(kinds) == 1 else None
+                user_matches = [c for c in candidates if self.config.roots.get("user_data") and
+                                c.path.is_relative_to(Path(self.config.roots["user_data"]))]
                 if len(user_matches) == 1:
                     try:
                         self.add_plugin_location(name, user_matches[0].path)
@@ -1034,7 +1072,7 @@ class MainWindow(QMainWindow):
                         continue
                     except (ValueError, OSError) as exc:
                         self.details.appendPlainText(f"Could not automatically add {name}: {exc}")
-                dialog = PluginLocationDialog(self.config, name, candidates, self)
+                dialog = PluginLocationDialog(self.config, name, candidates, self, plugin_kind=plugin_kind)
                 accepted = dialog.exec()
                 chosen_path = dialog.path
                 dialog.deleteLater()
@@ -1064,7 +1102,7 @@ class MainWindow(QMainWindow):
                 if p.is_zip or p.source.is_dir():
                     review = True
                     break
-                choices = compatible(self.config, p.source, automatic=selection == "auto", plugin_name=p.plugin_name, plugin_kind=p.plugin_kind)
+                choices = package_choices(self.config, p, automatic=selection == "auto")
                 if selection != "auto":
                     choices = [d for d in choices if d.id == selection]
                 if len(choices) != 1:
@@ -1074,6 +1112,8 @@ class MainWindow(QMainWindow):
                                                  (", ".join(d.name for d in suggestions) or "create an accept-any destination"))
                     continue
                 root, target = resolve(self.config, choices[0])
+                if p.destination_subfolder:
+                    target /= p.destination_subfolder
                 validate_root(root, choices[0].root)
                 validate_target(root, target)
                 jobs.append(Job(p, root, target))
@@ -1097,6 +1137,8 @@ class MainWindow(QMainWindow):
             self.status.setText(f"No files selected. {self.pending_skipped} skipped; {len(errors)} failed inspections.")
             return
         self.last_target = jobs[0].target
+        if jobs[0].package.zip_root_folder and not jobs[0].keep_zip:
+            self.last_target /= jobs[0].package.zip_root_folder
         self.open_button.setEnabled(True)
         conflict = (lambda _path: "replace") if self.config.always_replace_duplicates else None
         self.start_worker(lambda w: run_jobs(jobs, self.config.zip_limits, w.cancel, conflict or w.ask_conflict, w.progress.emit), self.transferred)

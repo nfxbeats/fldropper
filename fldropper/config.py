@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from .catalog import CATALOG_REVISION, PLUGIN_PRESETS
+from .catalog import CATALOG_REVISION, PLUGIN_PRESETS, CHANNEL_PRESETS
 
 
 class ConfigError(ValueError):
@@ -62,10 +62,17 @@ def plugin_destinations() -> list[Destination]:
             for id, name, category, folder in PLUGIN_PRESETS]
 
 
+def channel_destinations() -> list[Destination]:
+    return [Destination(f"channel-{id}", name, [".fst"], "fl_install", path)
+            for id, name, path in CHANNEL_PRESETS]
+
+
 def default_config() -> Config:
     # Deliberately unconfigured entries are visible, editable, and never guessed.
     return Config(destinations=[
-        Destination("piano", "Piano Roll scripts", [".pyscript"], "user_data", "Settings/Piano roll scripts"),
+        Destination("piano", "Piano Roll scripts", [".pyscript", ".py"], "user_data", "Settings/Piano roll scripts"),
+        Destination("edison", "Edison audio scripts", [".pyscript", ".py"], "user_data", "Settings/Audio scripts"),
+        Destination("hardware", "MIDI hardware scripts", [".py"], "user_data", "Settings/Hardware"),
         Destination("zge", "ZGameEditor objects (.zgeproj)", [".zgeproj"], "shared_data",
                     "ZGameEditor Visualizer/Effects"),
         Destination("visualizer", "Visualizer plugin presets", [".fst"], "user_data",
@@ -75,7 +82,7 @@ def default_config() -> Config:
         Destination("samples", "Samples (choose an organization folder)", [".wav", ".aif", ".aiff", ".mp3", ".ogg", ".flac"]),
         Destination("midi", "MIDI files (choose a folder)", [".mid", ".midi"]),
         Destination("projects", "FL Studio projects (choose a folder)", [".flp", ".zip"]),
-    ] + plugin_destinations(), extra={"catalog_revision": CATALOG_REVISION})
+    ] + plugin_destinations() + channel_destinations(), extra={"catalog_revision": CATALOG_REVISION})
 
 
 def relative_path(value: str) -> Path:
@@ -204,6 +211,39 @@ def load(path: Path) -> Config:
             for d in config.destinations:
                 if d.id == "preset-patcher" and d.name == "Patcher":
                     d.name = "Patcher (Effect)"
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 4:
+            for destination in default_config().destinations:
+                if destination.id in ("edison", "hardware") and not any(d.id == destination.id for d in config.destinations):
+                    config.destinations.append(destination)
+            for d in config.destinations:
+                if d.id == "piano" and d.extensions == [".pyscript"]:
+                    d.extensions.append(".py")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 5:
+            if not any(d.id == "preset-fpc" for d in config.destinations):
+                existing = next((d for d in config.destinations if d.name.casefold() == "fpc" or
+                                 str(d.extra.get("plugin_name", "")).casefold() == "fpc"), None)
+                if existing is not None:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "preset-fpc"
+                    existing.id = "preset-fpc"
+                else:
+                    config.destinations.extend(d for d in plugin_destinations() if d.id == "preset-fpc")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 6:
+            if not any(d.id == "channel-3x-osc" for d in config.destinations):
+                existing = next((d for d in config.destinations if
+                                 d.name.replace(" ", "").casefold() == "3xosc" or
+                                 str(d.extra.get("plugin_name", "")).replace(" ", "").casefold() == "3xosc"), None)
+                known = channel_destinations()[0]
+                if existing is not None:
+                    if config.last_selection == existing.id:
+                        config.last_selection = known.id
+                    existing.id, existing.name = known.id, known.name
+                    existing.root, existing.path = known.root, known.path
+                else:
+                    config.destinations.append(known)
             config.extra["catalog_revision"] = CATALOG_REVISION
         return config
     except (ValueError, TypeError, KeyError, OSError) as exc:

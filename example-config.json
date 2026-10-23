@@ -1,5 +1,5 @@
 {
-  "catalog_revision": 2,
+  "catalog_revision": 6,
   "version": 1,
   "roots": {
     "user_data": "",
@@ -11,10 +11,34 @@
       "id": "piano",
       "name": "Piano Roll scripts",
       "extensions": [
-        ".pyscript"
+        ".pyscript",
+        ".py"
       ],
       "root": "user_data",
       "path": "Settings/Piano roll scripts",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "edison",
+      "name": "Edison audio scripts",
+      "extensions": [
+        ".pyscript",
+        ".py"
+      ],
+      "root": "user_data",
+      "path": "Settings/Audio scripts",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "hardware",
+      "name": "MIDI hardware scripts",
+      "extensions": [
+        ".py"
+      ],
+      "root": "user_data",
+      "path": "Settings/Hardware",
       "enabled": true,
       "automatic": true
     },
@@ -125,6 +149,17 @@
       "automatic": true
     },
     {
+      "id": "preset-fpc",
+      "name": "FPC",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/FPC",
+      "enabled": true,
+      "automatic": true
+    },
+    {
       "id": "preset-harmless",
       "name": "Harmless",
       "extensions": [
@@ -181,12 +216,23 @@
     },
     {
       "id": "preset-patcher",
-      "name": "Patcher",
+      "name": "Patcher (Effect)",
       "extensions": [
         ".fst"
       ],
       "root": "user_data",
       "path": "Presets/Plugin presets/Effects/Patcher",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-patcher-generator",
+      "name": "Patcher (Generator)",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Patcher",
       "enabled": true,
       "automatic": true
     },
@@ -231,6 +277,17 @@
       ],
       "root": "user_data",
       "path": "Presets/Plugin presets/Effects/Wave Candy",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "channel-3x-osc",
+      "name": "3x Osc channel states",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "fl_install",
+      "path": "Data/Patches/Channel presets/3x Osc",
       "enabled": true,
       "automatic": true
     }

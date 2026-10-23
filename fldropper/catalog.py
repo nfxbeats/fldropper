@@ -7,6 +7,7 @@ be added in Settings once their extensions are confirmed.
 PLUGIN_PRESETS = (
     ("autogun", "Autogun", "Generators", "Autogun"),
     ("directwave", "DirectWave", "Generators", "DirectWave"),
+    ("fpc", "FPC", "Generators", "FPC"),
     ("harmless", "Harmless", "Generators", "Harmless"),
     ("harmor", "Harmor", "Generators", "Harmor"),
     ("kepler-exo", "Kepler EXO", "Generators", "Kepler Exo"),
@@ -20,4 +21,6 @@ PLUGIN_PRESETS = (
     ("wave-candy", "Wave Candy", "Effects", "Wave Candy"),
 )
 
-CATALOG_REVISION = 3
+CHANNEL_PRESETS = (("3x-osc", "3x Osc channel states", "Data/Patches/Channel presets/3x Osc"),)
+
+CATALOG_REVISION = 6
