@@ -15,7 +15,7 @@ def fst_package_groups(package: Package, *, split: bool = True) -> list[Package]
     """Separate FSTs by outer plugin while preserving package-relative paths."""
     if not split or package.has_scripts or not package.file_plugins or any(p.suffix.casefold() == ".flp" for p in package.files):
         return [package]  # Project packages retain their intact-ZIP choice.
-    other_primary = {".flp", ".pyscript", ".zgeproj", ".mid", ".midi", ".fsc", ".fxp", ".h2p"} | NATIVE_PRESET_PLUGINS.keys()
+    other_primary = {".flp", ".pyscript", ".zgeproj", ".mid", ".midi", ".fsc", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys()
     companions = [p for p in package.files if p not in package.file_plugins and p.suffix.casefold() not in other_primary]
     remaining = [p for p in package.files if p not in package.file_plugins and p not in companions]
     groups = {}
@@ -30,6 +30,7 @@ def fst_package_groups(package: Package, *, split: bool = True) -> list[Package]
     result = [replace(package, selected_files=paths + companions, plugin_name=names[key], plugin_kind=key[1], fst_type=key[2],
                       display_name=package.file_display_names.get(paths[0]),
                       hosted_plugin_name=package.file_hosted_plugin_names.get(paths[0]),
+                      database_name=package.file_database_names.get(paths[0]),
                       group_name=((f"{names[key]} ({key[1].title()})" if key[1] else names[key] or "Unidentified FST presets")
                                   + (" — Channel state" if key[2] == "channel" else "")), is_fst_group=True)
               for key, paths in groups.items()]
@@ -47,6 +48,14 @@ def plugin_destination_id(plugin_name: str | None) -> str | None:
 
 
 def matches_plugin(dest: Destination, plugin_name: str, plugin_kind: str | None = None, fst_type: str | None = None) -> bool:
+    if fst_type == "channel" and plugin_name == "Channel preset":
+        return dest.id == "channel-presets"
+    if dest.id == "channel-presets":
+        return False
+    if fst_type == "mixer":
+        return dest.id == "mixer"
+    if dest.id == "mixer":
+        return False
     tag = dest.extra.get("plugin_name")
     if plugin_kind and dest.extra.get("plugin_kind") and dest.extra["plugin_kind"] != plugin_kind:
         return False
@@ -71,10 +80,16 @@ def compatible(config: Config, path: Path, automatic: bool = False,
                plugin_name: str | None = None, plugin_kind: str | None = None, fst_type: str | None = None) -> list[Destination]:
     choices = [d for d in config.destinations if d.enabled and d.accepts(path)
             and (not automatic or (d.automatic and bool(d.extensions)))]
+    if automatic and path.suffix.casefold() == ".fst" and fst_type == "mixer":
+        return [d for d in choices if d.id == "mixer"]
+    if automatic and path.suffix.casefold() == ".fst":
+        choices = [d for d in choices if d.id != "mixer" and (d.id != "channel-presets" or (fst_type == "channel" and plugin_name == "Channel preset"))]
     if automatic and path.suffix.casefold() == ".fst" and plugin_name:
         return [d for d in choices if matches_plugin(d, plugin_name, plugin_kind, fst_type)]
     if automatic and path.suffix.casefold() in (".fxp", ".h2p"):
         return [d for d in choices if plugin_name and matches_plugin(d, plugin_name, plugin_kind)]
+    if automatic and path.suffix.casefold() == ".chenv":
+        return [d for d in choices if d.id == "channel-envelopes"]
     if automatic and path.suffix.casefold() in (".fsc", ".mid", ".midi"):
         return [d for d in choices if d.id == "scores"]
     if automatic and path.suffix.casefold() in NATIVE_PRESET_PLUGINS:
@@ -84,7 +99,9 @@ def compatible(config: Config, path: Path, automatic: bool = False,
 
 def package_choices(config: Config, package: Package, automatic: bool = True) -> list[Destination]:
     if not package.has_scripts:
-        primary = {p.suffix.casefold() for p in package.planned_files} & ({".fsc", ".mid", ".midi", ".fst", ".flp", ".pyscript", ".zgeproj", ".fxp", ".h2p"} | NATIVE_PRESET_PLUGINS.keys())
+        primary = {p.suffix.casefold() for p in package.planned_files} & ({".fsc", ".mid", ".midi", ".fst", ".flp", ".pyscript", ".zgeproj", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys())
+        if automatic and primary == {".chenv"}:
+            return compatible(config, Path("envelope.chenv"), automatic)
         if automatic and primary and primary <= {".fsc", ".mid", ".midi"}:
             return compatible(config, Path("score.fsc"), automatic)
         return compatible(config, package.route_path, automatic, package.plugin_name, package.plugin_kind, package.fst_type)
@@ -125,7 +142,7 @@ def package_matches(config: Config, paths: list[Path], dest: Destination) -> tup
     if not dest.extensions:
         return True, []
     recognized = {ext for d in config.destinations for ext in d.extensions} - {".zip"}
-    primary = {".pyscript", ".zgeproj", ".fst", ".flp", ".mid", ".midi", ".fsc", ".fxp", ".h2p"} | NATIVE_PRESET_PLUGINS.keys()
+    primary = {".pyscript", ".zgeproj", ".fst", ".flp", ".mid", ".midi", ".fsc", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys()
     present = [p for p in paths if p.suffix.casefold() in primary]
     if not present:
         present = [p for p in paths if p.suffix.casefold() in recognized]

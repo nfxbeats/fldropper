@@ -33,4 +33,9 @@ NATIVE_PRESET_PLUGINS = {ext: name for id, name, _, _ in PLUGIN_PRESETS
 # Measured from the user-identified PoiZone ABS Abysmal ARP.fxp sample.
 FXP_PLUGIN_IDS = {b"SawW": ("PoiZone", "generator")}
 
-CATALOG_REVISION = 13
+# User-identified CracklePad.FXP uses H4M9; the installed Albino3 FST
+# and Plugin Manager NFO both identify Albino3 64 as g7U0.
+FXP_ID_ALIASES = {b"H4M9": b"g7U0"}
+
+
+CATALOG_REVISION = 17

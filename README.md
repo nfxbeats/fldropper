@@ -50,13 +50,21 @@ FPC kits use `Presets/Plugin presets/Generators/FPC` inside User Data Folder. Th
 
 Morphine presets in either `.fst` or native `.mrp` format use the same destination: `Presets/Plugin presets/Generators/Morphine` inside User Data Folder.
 
+Sampler channel-state `.fst` files with an empty internal plugin identity use `Presets/Channel presets` inside User Data Folder.
+
+Channel envelope `.chenv` files use `Presets/Channel envelopes` inside User Data Folder.
+
+Mixer-track `.fst` presets are recognized by their mixer-state header and copied to `Presets/Mixer presets` inside User Data Folder, including folder and ZIP imports.
+
 Sawer presets in `.fst` or `.sawer` format use `Presets/Plugin presets/Generators/Sawer` inside User Data Folder.
 
 Toxic Biohazard presets in `.fst`, `.txd`, or `.tbio` format use `Presets/Plugin presets/Generators/Toxic Biohazard` inside User Data Folder.
 
-FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder’s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin name and category, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
+FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder’s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin identity and category; its Plugin Manager `.nfo` name (or database FST filename) supplies the destination name, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
 
-H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the plugin name and category for the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he’s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
+The supplied Albino CracklePad FXP uses ID `H4M9` and an omitted outer size. FL Dropper checks its exact inner chunk length and, if no direct match exists, looks up installed Albino ID `g7U0`. A matching installed FST is still required; this alias comes from the user-identified sample and local Albino metadata.
+
+H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the identity and category, and the Plugin Manager name supplies the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he’s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
 
 
 FST headers distinguish **channel states** from **plugin presets**. **3x Osc channel states** are an exception to the User Data preference: they go to `Data/Patches/Channel presets/3x Osc` inside FL Studio Install Folder. The detected channel-state type appears in the highlighted filename and import details. Installation-folder permissions may prevent copying; the app reports the failing path.
@@ -110,7 +118,7 @@ Close FL Dropper, update or replace the downloaded app files, and run **setup.ba
 
 ## Your settings
 
-Folders, custom destinations, and preferences are saved in **config.json in the app folder**, beside `run.bat` and `setup.command`. Each copy of FL Dropper has its own settings. A new directory starts fresh unless you copy an existing `config.json` into it.
+Folders, custom destinations, and preferences are saved in **config.json in the app folder**, beside `run.bat` and `setup.command`. Each copy of FL Dropper has its own settings. A new directory starts with the bundled known destinations and preferences, including previously learned plugin locations. Install, Shared User Data, and User Data root paths start blank and are detected on that computer. Existing configuration files keep their own settings.
 
 To reset a copy, close the app and rename its `config.json` as a backup. To move your settings to another copy, copy that file. **Settings â†’ Open configuration** opens the configuration file after it has been saved. Keep the app in a writable folder.
 

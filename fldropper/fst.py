@@ -92,6 +92,7 @@ class FstMetadata:
     hosted_plugin_name: str | None = None
 
     vst2_id: int | None = None
+    database_name: str | None = None
 
     @property
     def channel_name(self) -> str | None:
@@ -122,7 +123,7 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
             return unknown("Missing or truncated FLhd header")
         header_size = struct.unpack_from("<I", data, 4)[0]
         file_format = struct.unpack_from("<H", data, 8)[0]
-        if header_size != 6 or file_format not in (FileFormat.PluginState, FileFormat.ChannelState):
+        if header_size != 6 or file_format not in (FileFormat.PluginState, FileFormat.ChannelState, FileFormat.InsertState):
             return unknown("Unsupported header size or non-plugin-preset format")
         fst_type = "channel" if file_format == FileFormat.ChannelState else "plugin"
         if data[14:18] != b"FLdt":
@@ -130,6 +131,13 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
         size = struct.unpack_from("<I", data, 18)[0]
         if 22 + size != (file_size if file_size is not None else len(data)):
             return unknown("Declared FLdt length does not match file size")
+        if file_format == FileFormat.InsertState:
+            # The outer state is the complete mixer insert. Never identify it
+            # by one of the effect plugins nested inside its event stream.
+            if not size:
+                return unknown("Empty mixer preset event chunk")
+            plugin_name, fst_type = "Mixer preset", "mixer"
+            return identified()
         end = min(22 + size, len(data), MAX_PREFIX)
         cursor = 22
         while cursor < end:
@@ -192,6 +200,10 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                 name = decoder.STRUCT.parse(raw)
                 if "\x00" in raw[:-len(terminator)].decode(selected_encoding):
                     return unknown("Plugin name contains embedded terminators")
+                if not name and fst_type == "channel":
+                    plugin_name, name_offset, encoding = "Channel preset", cursor, selected_encoding
+                    cursor += length
+                    continue
                 if not name or not all(32 <= ord(c) < 127 for c in name):
                     return unknown("Plugin name contains unsupported/control characters")
                 plugin_name, name_offset, encoding = name, cursor, selected_encoding

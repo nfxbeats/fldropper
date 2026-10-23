@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import struct
 
-from .catalog import FXP_PLUGIN_IDS
+from .catalog import FXP_PLUGIN_IDS, FXP_ID_ALIASES
 
 HEADER_BYTES = 60
 
@@ -29,7 +29,9 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FxpMetadata:
     declared = struct.unpack_from(">I", data, 4)[0]
     # The supplied PoiZone file counts the size field itself (size - 4),
     # whereas standard FXP excludes both the magic and size fields (size - 8).
-    if declared != size - 8 and not (known and declared == size - 4):
+    # CracklePad.FXP omits the outer size but supplies an exact chunk size.
+    omitted_size = declared == 0 and magic == b"FPCh" and plugin_id in FXP_ID_ALIASES
+    if declared != size - 8 and not (known and declared == size - 4) and not omitted_size:
         return FxpMetadata(reason="FXP declared length does not match file size")
     if struct.unpack_from(">I", data, 12)[0] != 1:
         return FxpMetadata(reason="Unsupported FXP format version")
@@ -59,6 +61,22 @@ def _product_key(name: str) -> str:
     # "Diva". Remove only a terminal architecture tag, never arbitrary suffixes.
     import re
     return re.sub(r"\s*\(x(?:64|86)\)$", "", name, flags=re.I).strip().casefold()
+
+
+def _database_name(path: Path) -> str:
+    """Plugin Manager's name, never the renameable channel label in the FST."""
+    from .transfers import is_link
+    nfo = path.with_suffix(".nfo")
+    if nfo.is_file() and not is_link(nfo):
+        with nfo.open("rb") as stream:
+            text = stream.read(64 * 1024).decode("utf-8-sig", errors="replace")
+        for line in text.splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key.strip().casefold() == "ps_name":
+                value = value.strip()
+                if value and len(value) <= 256 and all(c.isprintable() for c in value):
+                    return value
+    return path.stem
 
 
 class InstalledPluginLookup:
@@ -105,6 +123,11 @@ class InstalledPluginLookup:
         ident = int.from_bytes(metadata.plugin_id.encode("latin-1"), "big")
         matches = self.entries.get(ident, [])
         if not matches:
+            alias = FXP_ID_ALIASES.get(metadata.plugin_id.encode("latin-1"))
+            if alias:
+                ident = int.from_bytes(alias, "big")
+                matches = self.entries.get(ident, [])
+        if not matches:
             raise ValueError(f"No installed-plugin FST matches FXP ID 0x{ident:08X}. Scan the plugin in FL Studio Plugin Manager and try again.")
         identities = {(info.hosted_plugin_name.casefold(), kind) for _, info, kind in matches}
         if len(identities) != 1:
@@ -115,7 +138,7 @@ class InstalledPluginLookup:
         info = inspect_file(path)
         if info.vst2_id != ident or not info.hosted_plugin_name or info.reason:
             raise ValueError(f"Matched plugin FST could not be read: {path}")
-        return replace(info, plugin_kind=kind, fst_type="plugin")
+        return replace(info, plugin_kind=kind, fst_type="plugin", database_name=_database_name(path))
 
 
     def resolve_name(self, name: str):
@@ -132,4 +155,4 @@ class InstalledPluginLookup:
         info = inspect_file(path)
         if info.reason or not info.hosted_plugin_name or _product_key(info.hosted_plugin_name) != _product_key(name):
             raise ValueError(f"Matched plugin FST could not be read: {path}")
-        return replace(info, plugin_kind=kind, fst_type="plugin")
+        return replace(info, plugin_kind=kind, fst_type="plugin", database_name=_database_name(path))

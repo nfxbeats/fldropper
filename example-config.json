@@ -1,5 +1,11 @@
 {
-  "catalog_revision": 13,
+  "catalog_revision": 17,
+  "preset_name_history": [
+    "Fruity Wrapper - Gtr Lead1",
+    "Fruity Wrapper - Strum GS-2",
+    "Fruity Wrapper - Diva(x64)",
+    "Fruity Wrapper - Albino3"
+  ],
   "version": 1,
   "roots": {
     "user_data": "",
@@ -205,18 +211,6 @@
       "automatic": true
     },
     {
-      "id": "preset-morphine",
-      "name": "Morphine",
-      "extensions": [
-        ".fst",
-        ".mrp"
-      ],
-      "root": "user_data",
-      "path": "Presets/Plugin presets/Generators/Morphine",
-      "enabled": true,
-      "automatic": true
-    },
-    {
       "id": "preset-ogun",
       "name": "Ogun",
       "extensions": [
@@ -262,18 +256,6 @@
       "automatic": true
     },
     {
-      "id": "preset-sawer",
-      "name": "Sawer",
-      "extensions": [
-        ".fst",
-        ".sawer"
-      ],
-      "root": "user_data",
-      "path": "Presets/Plugin presets/Generators/Sawer",
-      "enabled": true,
-      "automatic": true
-    },
-    {
       "id": "preset-sytrus",
       "name": "Sytrus",
       "extensions": [
@@ -281,19 +263,6 @@
       ],
       "root": "user_data",
       "path": "Presets/Plugin presets/Generators/Sytrus",
-      "enabled": true,
-      "automatic": true
-    },
-    {
-      "id": "preset-toxic-biohazard",
-      "name": "Toxic Biohazard",
-      "extensions": [
-        ".fst",
-        ".tbio",
-        ".txd"
-      ],
-      "root": "user_data",
-      "path": "Presets/Plugin presets/Generators/Toxic Biohazard",
       "enabled": true,
       "automatic": true
     },
@@ -320,6 +289,7 @@
       "automatic": true
     },
     {
+      "plugin_name": "3x Osc",
       "id": "channel-3x-osc",
       "name": "3x Osc channel states",
       "extensions": [
@@ -327,6 +297,187 @@
       ],
       "root": "fl_install",
       "path": "Data/Patches/Channel presets/3x Osc",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "SimSynth",
+      "id": "e4e02bcf-7c8c-4f99-aed8-f9ae559130d1",
+      "name": "SimSynth",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/SimSynth",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Fruity Convolver",
+      "id": "06fc67b0-e35a-4f64-8487-8db03c96dcf7",
+      "name": "Fruity Convolver",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/Fruity Convolver",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "VFX Script",
+      "id": "4561994b-b83f-446b-9316-67a46f232880",
+      "name": "VFX Script",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/VFX Script",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Gross Beat",
+      "id": "5296a4ad-547b-4b67-aef8-3ede6039394a",
+      "name": "Gross Beat",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects/Gross Beat",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Kepler",
+      "id": "94cc49fd-b342-40a4-b1c8-85efa0139d87",
+      "name": "Kepler",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Kepler",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Fruity Wrapper",
+      "id": "d649ba2f-3697-4cb9-9651-2e01bb7e95c4",
+      "name": "Fruity Wrapper",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Fruity Wrapper",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "FLEX",
+      "id": "4cc43813-ba23-4a77-842f-de491ccb9b70",
+      "name": "FLEX",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/FLEX",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Fruity Wrapper - Strum GS-2",
+      "plugin_kind": "generator",
+      "id": "1bd64a8f-48f8-45b3-b01c-bc6b4778fd38",
+      "name": "Fruity Wrapper - Strum GS-2",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Fruity Wrapper - Strum GS-2",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-morphine",
+      "name": "Morphine",
+      "extensions": [
+        ".fst",
+        ".mrp"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Morphine",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-toxic-biohazard",
+      "name": "Toxic Biohazard",
+      "extensions": [
+        ".fst",
+        ".tbio",
+        ".txd"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Toxic Biohazard",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-sawer",
+      "name": "Sawer",
+      "extensions": [
+        ".fst",
+        ".sawer"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Sawer",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "mixer",
+      "name": "Mixer presets",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Mixer presets",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "channel-envelopes",
+      "name": "Channel envelopes",
+      "extensions": [
+        ".chenv"
+      ],
+      "root": "user_data",
+      "path": "Presets/Channel envelopes",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "channel-presets",
+      "name": "Channel presets",
+      "extensions": [
+        ".fst"
+      ],
+      "root": "user_data",
+      "path": "Presets/Channel presets",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "plugin_name": "Fruity Wrapper - Albino3",
+      "plugin_kind": "generator",
+      "id": "2c6cc30a-8bd8-4e21-8d89-28a50c34e01c",
+      "name": "Fruity Wrapper - Albino3",
+      "extensions": [
+        ".fst",
+        ".fxp"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Fruity Wrapper - Albino3",
       "enabled": true,
       "automatic": true
     }

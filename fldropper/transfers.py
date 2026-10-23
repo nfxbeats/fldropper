@@ -82,6 +82,8 @@ class Package:
     destination_subfolder: str | None = None
     hardware_nested: bool = False
     zip_root_folder: Path | None = None
+    database_name: str | None = None
+    file_database_names: dict[Path, str | None] = field(default_factory=dict)
     fst_type: str | None = None
     file_fst_types: dict[Path, str | None] = field(default_factory=dict)
     display_name: str | None = None
@@ -170,6 +172,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             fst_types = {}
             display_names = {}
             hosted_names = {}
+            database_names = {}
             scripts = {}
             from .scripts import MAX_SCRIPT_BYTES, inspect_script, classify_scripts
             metadata_bytes = 0
@@ -187,6 +190,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
                     fst_types[relative] = metadata.fst_type
                     display_names[relative] = metadata.display_name
                     hosted_names[relative] = metadata.hosted_plugin_name
+                    database_names[relative] = metadata.database_name
                 elif not info.is_dir() and relative.suffix.casefold() in (".py", ".pyscript"):
                     with archive.open(info) as stream:
                         prefix = stream.read(min(MAX_SCRIPT_BYTES + 1, info.file_size))
@@ -207,6 +211,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
                     plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
                     fst_types[relative] = metadata.fst_type
                     hosted_names[relative] = metadata.hosted_plugin_name
+                    database_names[relative] = metadata.database_name
                 elif not info.is_dir() and relative.suffix.casefold() == ".fxp":
                     from .fxp import HEADER_BYTES, inspect_bytes as inspect_fxp
                     with archive.open(info) as stream:
@@ -219,10 +224,11 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
                         metadata = fxp_lookup.resolve(metadata)
                         fst_types[relative] = metadata.fst_type
                         hosted_names[relative] = metadata.hosted_plugin_name
+                        database_names[relative] = metadata.database_name
                     plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
         kind, notes = classify_scripts(scripts) if scripts else (None, [])
         package = Package(source, files, is_zip=True, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds,
-                          has_scripts=bool(scripts), script_kind=kind, script_notes=notes, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names)
+                          has_scripts=bool(scripts), script_kind=kind, script_notes=notes, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names, file_database_names=database_names)
         top_levels = {path.parts[0] for path in [*files, *directories]}
         if len(top_levels) == 1 and all(len(path.parts) > 1 for path in files):
             package.zip_root_folder = Path(next(iter(top_levels)))
@@ -240,6 +246,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             metadata = inspect_h2p_file(source, fxp_lookup)
             package.plugin_name, package.plugin_kind = metadata.plugin_name, metadata.plugin_kind
             package.fst_type, package.hosted_plugin_name = metadata.fst_type, metadata.hosted_plugin_name
+            package.database_name = metadata.database_name
         if source.suffix.casefold() == ".fxp":
             from .fxp import inspect_file as inspect_fxp_file
             metadata = inspect_fxp_file(source)
@@ -247,6 +254,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
                 metadata = fxp_lookup.resolve(metadata)
                 package.fst_type = metadata.fst_type
                 package.hosted_plugin_name = metadata.hosted_plugin_name
+                package.database_name = metadata.database_name
             package.plugin_name, package.plugin_kind = metadata.plugin_name, metadata.plugin_kind
         if source.suffix.casefold() in (".py", ".pyscript"):
             inspect_script_files(package)
@@ -277,6 +285,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
     fst_types = {}
     display_names = {}
     hosted_names = {}
+    database_names = {}
     for relative in files:
         check_cancel(cancel)
         if relative.suffix.casefold() == ".fst":
@@ -286,6 +295,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             fst_types[relative] = metadata.fst_type
             display_names[relative] = metadata.display_name
             hosted_names[relative] = metadata.hosted_plugin_name
+            database_names[relative] = metadata.database_name
         elif relative.suffix.casefold() in NATIVE_PRESET_PLUGINS:
             plugins[relative], kinds[relative] = NATIVE_PRESET_PLUGINS[relative.suffix.casefold()], "generator"
         elif relative.suffix.casefold() == ".h2p":
@@ -294,6 +304,7 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
             fst_types[relative] = metadata.fst_type
             hosted_names[relative] = metadata.hosted_plugin_name
+            database_names[relative] = metadata.database_name
         elif relative.suffix.casefold() == ".fxp":
             from .fxp import inspect_file as inspect_fxp_file
             metadata = inspect_fxp_file(source / relative)
@@ -301,8 +312,9 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
                 metadata = fxp_lookup.resolve(metadata)
                 fst_types[relative] = metadata.fst_type
                 hosted_names[relative] = metadata.hosted_plugin_name
+                database_names[relative] = metadata.database_name
             plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
-    package = Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names)
+    package = Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names, file_database_names=database_names)
     inspect_script_files(package, cancel)
     return package
 

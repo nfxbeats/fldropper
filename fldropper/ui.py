@@ -1186,6 +1186,8 @@ class MainWindow(QMainWindow):
                              and (p.plugin_name or p.has_scripts)))
                 plugin = ", ".join(names) or None
             label = "Score/MIDI file" if self.last_dropped_path.suffix.casefold() in (".fsc", ".mid", ".midi") else plugin or "Plugin not identified"
+            if self.last_dropped_path.suffix.casefold() == ".chenv":
+                label = "Channel envelope"
             self.last_drop_label.setText(f"{label}: {self.last_dropped_path.name}")
             self.last_drop_label.setToolTip(self.last_drop_label.text())
         if isinstance(result, Exception):
@@ -1333,7 +1335,7 @@ class MainWindow(QMainWindow):
                 name = None
                 if wrapper and p.hosted_plugin_name and kind:
                     try:
-                        name = formatted_plugin_name(p.hosted_plugin_name, True)
+                        name = formatted_plugin_name(p.database_name or p.hosted_plugin_name, True)
                     except ValueError:
                         pass
                 if not name:

@@ -19,7 +19,7 @@ fldropper = "fldropper.ui:main"
 include = ["fldropper*"]
 
 [tool.setuptools.package-data]
-fldropper = ["assets/*.ico", "assets/*.png"]
+fldropper = ["assets/*.ico", "assets/*.png", "defaults.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

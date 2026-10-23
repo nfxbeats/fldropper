@@ -77,6 +77,9 @@ def default_config() -> Config:
                     "ZGameEditor Visualizer/Effects"),
         Destination("visualizer", "Visualizer plugin presets", [".fst"], "user_data",
                     "Presets/Plugin presets/Effects/ZGameEditor Visualizer"),
+        Destination("channel-presets", "Channel presets", [".fst"], "user_data", "Presets/Channel presets"),
+        Destination("channel-envelopes", "Channel envelopes", [".chenv"], "user_data", "Presets/Channel envelopes"),
+        Destination("mixer", "Mixer presets", [".fst"], "user_data", "Presets/Mixer presets"),
         Destination("generator", "Generator presets", [".fst"], "user_data", "Presets/Plugin presets/Generators"),
         Destination("effect", "Effect presets", [".fst"], "user_data", "Presets/Plugin presets/Effects"),
         Destination("samples", "Samples (choose an organization folder)", [".wav", ".aif", ".aiff", ".mp3", ".ogg", ".flac"]),
@@ -180,7 +183,14 @@ def parse(data: dict) -> Config:
 
 def load(path: Path) -> Config:
     if not path.exists():
-        return default_config()
+        # Ship a portable snapshot of known routes/preferences for new copies.
+        # Existing config files never receive this snapshot over their edits.
+        defaults = Path(__file__).with_name("defaults.json")
+        if not defaults.exists():
+            return default_config()
+        config = load(defaults)
+        config.roots = {key: "" for key in config.roots}
+        return config
     try:
         config = parse(json.loads(path.read_text(encoding="utf-8")))
         # Add this catalog expansion once, without overwriting customizations or
@@ -319,6 +329,52 @@ def load(path: Path) -> Config:
                 if (d.id == "preset-sawer" or d.name.casefold() == "sawer" or
                         str(d.extra.get("plugin_name", "")).casefold() == "sawer"):
                     d.extensions = list(dict.fromkeys([*d.extensions, ".fst", ".sawer"]))
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 14:
+            if not any(d.id == "mixer" for d in config.destinations):
+                existing = next((d for d in config.destinations if d.name.casefold() in ("mixer preset", "mixer presets")), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "mixer"
+                    existing.id = "mixer"
+                    existing.extensions = list(dict.fromkeys([*existing.extensions, ".fst"]))
+                else:
+                    config.destinations.extend(d for d in default_config().destinations if d.id == "mixer")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 15:
+            if not any(d.id == "channel-envelopes" for d in config.destinations):
+                existing = next((d for d in config.destinations if d.name.casefold() == "channel envelopes"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "channel-envelopes"
+                    existing.id = "channel-envelopes"
+                    existing.extensions = list(dict.fromkeys([*existing.extensions, ".chenv"]))
+                else:
+                    config.destinations.extend(d for d in default_config().destinations if d.id == "channel-envelopes")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 16:
+            if not any(d.id == "channel-presets" for d in config.destinations):
+                existing = next((d for d in config.destinations if d.name.casefold() == "channel presets"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "channel-presets"
+                    existing.id = "channel-presets"
+                    existing.extensions = list(dict.fromkeys([*existing.extensions, ".fst"]))
+                else:
+                    config.destinations.extend(d for d in default_config().destinations if d.id == "channel-presets")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 17:
+            old, new = "Fruity Wrapper - Albino3 64", "Fruity Wrapper - Albino3"
+            for d in config.destinations:
+                if d.name == old or d.extra.get("plugin_name") == old:
+                    if d.name == old:
+                        d.name = new
+                    if d.extra.get("plugin_name") == old:
+                        d.extra["plugin_name"] = new
+                    if d.root == "user_data" and d.path == "Presets/Plugin presets/Generators/" + old:
+                        d.path = "Presets/Plugin presets/Generators/" + new
+            if isinstance(config.extra.get("preset_name_history"), list):
+                config.extra["preset_name_history"] = list(dict.fromkeys(new if n == old else n for n in config.extra["preset_name_history"]))
             config.extra["catalog_revision"] = CATALOG_REVISION
         return config
     except (ValueError, TypeError, KeyError, OSError) as exc:
