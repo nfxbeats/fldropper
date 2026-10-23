@@ -630,7 +630,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config_path: Path | None = None):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setWindowTitle("FL Dropper")
+        self.setWindowTitle("FL Dropper from NFX @ Warbeats")
         self.setWindowIcon(QIcon(str(WINDOW_ICON)))
         self.native_icons = WindowsIcons()
         self.destroyed.connect(self.native_icons.release)

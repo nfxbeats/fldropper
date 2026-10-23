@@ -1,5 +1,7 @@
 # FL Dropper
 
+Author: **Nelson Fernandez Jr. (NFX @ Warbeats)**
+
 Drop FL Studio presets, samples, scripts, projects, folders, or ZIP files into one small window and copy them to the right place. FL Dropper keeps your original files and archives unchanged.
 
 ## Install on Windows
