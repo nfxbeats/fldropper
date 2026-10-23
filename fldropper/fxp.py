@@ -87,6 +87,7 @@ class InstalledPluginLookup:
         self.cancel = cancel
         self.entries = None
         self.names = {}
+        self.native_entries = {}
 
     def _build(self):
         from .fst import inspect_file
@@ -109,6 +110,9 @@ class InstalledPluginLookup:
                             if path.suffix.casefold() != ".fst" or is_link(path):
                                 continue
                             info = inspect_file(path)
+                            if (info.plugin_name and not info.hosted_plugin_name and not info.reason
+                                    and info.fst_type == "plugin" and info.plugin_name.casefold() not in ("fruity wrapper", "fruit wrapper")):
+                                self.native_entries.setdefault(info.plugin_name.casefold(), []).append((path, info, kind))
                             if info.plugin_name and info.hosted_plugin_name and not info.reason:
                                 entry = (path, info, kind)
                                 self.names.setdefault(_product_key(info.hosted_plugin_name), []).append(entry)
@@ -127,6 +131,19 @@ class InstalledPluginLookup:
             if alias:
                 ident = int.from_bytes(alias, "big")
                 matches = self.entries.get(ident, [])
+        if not matches:
+            # Native FL plugins do not store a VST ID. Only bridge IDs already
+            # verified in our catalog, requiring the matching native database FST.
+            known = FXP_PLUGIN_IDS.get(metadata.plugin_id.encode("latin-1"))
+            native = self.native_entries.get(known[0].casefold(), []) if known else []
+            native = [(path, info, kind) for path, info, kind in native if kind == known[1]]
+            if native:
+                path, _, kind = native[0]
+                info = inspect_file(path)
+                if info.reason or info.plugin_name != known[0] or info.fst_type != "plugin" or info.hosted_plugin_name:
+                    raise ValueError(f"Matched native plugin FST could not be read: {path}")
+                from dataclasses import replace
+                return replace(info, plugin_kind=kind, database_name=_database_name(path))
         if not matches:
             raise ValueError(f"No installed-plugin FST matches FXP ID 0x{ident:08X}. Scan the plugin in FL Studio Plugin Manager and try again.")
         identities = {(info.hosted_plugin_name.casefold(), kind) for _, info, kind in matches}
