@@ -45,6 +45,10 @@ if errorlevel 1 (
     echo Installation failed. Check the error above and your internet connection, then rerun setup.bat.
     goto finish
 )
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\create-shortcut.ps1"
+if errorlevel 1 (
+    echo Desktop shortcut creation failed. You can still open the app using run.bat.
+)
 echo.
 echo Setup complete. Double-click run.bat to open FL Dropper.
 set "FLDROPPER_EXIT=0"

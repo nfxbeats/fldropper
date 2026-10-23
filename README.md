@@ -7,9 +7,11 @@ Drop FL Studio presets, samples, scripts, projects, folders, or ZIP files into o
 1. Install **Python 3.12 or newer** from [python.org](https://www.python.org/downloads/). If the installer offers **Add Python to PATH**, enable it.
 2. Download this repository and extract the ZIP, or clone it. Keep the entire folder together in a location you can write to, such as your Documents folder.
 3. Double-click **setup.bat**. An internet connection is needed to download the app's dependencies. Wait for **Setup complete**.
-4. Double-click **run.bat** to open FL Dropper.
+4. Double-click the **FL Dropper** desktop shortcut, or **run.bat**, to open FL Dropper.
 
 After setup, use **run.bat** whenever you want to open the app. You do not need to activate Python or enter commands.
+
+Setup creates or refreshes a Windows desktop shortcut with the bundled FL Dropper icon. Its target, working folder, and icon paths come from the current project location. If you move the project folder, rerun **setup.bat** to update the shortcut. The icon file stays in the project folder; it is referenced by the shortcut, not embedded in it. If shortcut creation fails, setup reports it and **run.bat** remains available.
 
 ## First-time setup
 
