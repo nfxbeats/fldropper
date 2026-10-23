@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from .catalog import CATALOG_REVISION, PLUGIN_PRESETS, CHANNEL_PRESETS
+from .catalog import CATALOG_REVISION, PLUGIN_PRESETS, CHANNEL_PRESETS, PLUGIN_EXTENSIONS
 
 
 class ConfigError(ValueError):
@@ -57,7 +57,7 @@ class Config:
 
 
 def plugin_destinations() -> list[Destination]:
-    return [Destination(f"preset-{id}", name, [".fst"], "user_data",
+    return [Destination(f"preset-{id}", name, list(PLUGIN_EXTENSIONS.get(id, (".fst",))), "user_data",
                         f"Presets/Plugin presets/{category}/{folder}")
             for id, name, category, folder in PLUGIN_PRESETS]
 
@@ -77,10 +77,10 @@ def default_config() -> Config:
                     "ZGameEditor Visualizer/Effects"),
         Destination("visualizer", "Visualizer plugin presets", [".fst"], "user_data",
                     "Presets/Plugin presets/Effects/ZGameEditor Visualizer"),
-        Destination("generator", "Generator presets", [".fst"]),
-        Destination("effect", "Effect presets", [".fst"]),
+        Destination("generator", "Generator presets", [".fst"], "user_data", "Presets/Plugin presets/Generators"),
+        Destination("effect", "Effect presets", [".fst"], "user_data", "Presets/Plugin presets/Effects"),
         Destination("samples", "Samples (choose an organization folder)", [".wav", ".aif", ".aiff", ".mp3", ".ogg", ".flac"]),
-        Destination("midi", "MIDI files (choose a folder)", [".mid", ".midi"]),
+        Destination("scores", "Scores", [".fsc", ".mid", ".midi"], "user_data", "Presets/Scores"),
         Destination("projects", "FL Studio projects (choose a folder)", [".flp", ".zip"]),
     ] + plugin_destinations() + channel_destinations(), extra={"catalog_revision": CATALOG_REVISION})
 
@@ -244,6 +244,81 @@ def load(path: Path) -> Config:
                     existing.root, existing.path = known.root, known.path
                 else:
                     config.destinations.append(known)
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 7:
+            for d in config.destinations:
+                if d.id in ("generator", "effect") and d.root == "absolute" and not d.path:
+                    d.root = "user_data"
+                    d.path = "Presets/Plugin presets/" + ("Generators" if d.id == "generator" else "Effects")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 8:
+            if not any(d.id == "scores" for d in config.destinations):
+                existing = next((d for d in config.destinations if d.id == "midi"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "scores"
+                    existing.id, existing.name = "scores", "Scores"
+                    existing.extensions = list(dict.fromkeys([".fsc", ".mid", ".midi", *existing.extensions]))
+                    if not existing.path:
+                        existing.root, existing.path = "user_data", "Presets/Scores"
+                else:
+                    config.destinations.extend(d for d in default_config().destinations if d.id == "scores")
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 9:
+            existing = next((d for d in config.destinations if d.id == "preset-morphine"), None)
+            if existing is None:
+                existing = next((d for d in config.destinations if d.name.casefold() == "morphine" or
+                                 str(d.extra.get("plugin_name", "")).casefold() == "morphine"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "preset-morphine"
+                    existing.id = "preset-morphine"
+                else:
+                    existing = next(d for d in plugin_destinations() if d.id == "preset-morphine")
+                    config.destinations.append(existing)
+            existing.extensions = list(dict.fromkeys([*existing.extensions, ".fst", ".mrp"]))
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 10:
+            existing = next((d for d in config.destinations if d.id == "preset-toxic-biohazard"), None)
+            if existing is None:
+                existing = next((d for d in config.destinations if d.name.casefold() == "toxic biohazard" or
+                                 str(d.extra.get("plugin_name", "")).casefold() == "toxic biohazard"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "preset-toxic-biohazard"
+                    existing.id = "preset-toxic-biohazard"
+                else:
+                    existing = next(d for d in plugin_destinations() if d.id == "preset-toxic-biohazard")
+                    config.destinations.append(existing)
+            existing.extensions = list(dict.fromkeys([*existing.extensions, ".fst", ".txd"]))
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 11:
+            for d in config.destinations:
+                if d.id == "preset-toxic-biohazard":
+                    d.extensions = list(dict.fromkeys([*d.extensions, ".tbio"]))
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 12:
+            for d in config.destinations:
+                if (d.id == "preset-poizone" or d.name.casefold() == "poizone" or
+                        str(d.extra.get("plugin_name", "")).casefold() == "poizone"):
+                    d.extensions = list(dict.fromkeys([*d.extensions, ".fxp"]))
+            config.extra["catalog_revision"] = CATALOG_REVISION
+        if revision < 13:
+            existing = next((d for d in config.destinations if d.id == "preset-sawer"), None)
+            if existing is None:
+                existing = next((d for d in config.destinations if d.name.casefold() == "sawer" or
+                                 str(d.extra.get("plugin_name", "")).casefold() == "sawer"), None)
+                if existing:
+                    if config.last_selection == existing.id:
+                        config.last_selection = "preset-sawer"
+                    existing.id = "preset-sawer"
+                else:
+                    existing = next(d for d in plugin_destinations() if d.id == "preset-sawer")
+                    config.destinations.append(existing)
+            for d in config.destinations:
+                if (d.id == "preset-sawer" or d.name.casefold() == "sawer" or
+                        str(d.extra.get("plugin_name", "")).casefold() == "sawer"):
+                    d.extensions = list(dict.fromkeys([*d.extensions, ".fst", ".sawer"]))
             config.extra["catalog_revision"] = CATALOG_REVISION
         return config
     except (ValueError, TypeError, KeyError, OSError) as exc:

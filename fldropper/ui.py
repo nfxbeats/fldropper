@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import copy
+import gc
 import sys
 import threading
 import uuid
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -19,8 +20,8 @@ from PySide6.QtWidgets import (
 from .config import Config, ConfigError, Destination, default_config, default_config_path, load, parse, resolve, save
 from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
-from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts
-from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative, scan, validate_target
+from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts, needs_plugin_name
+from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative, scan, validate_target, is_link
 
 
 STYLE = """
@@ -431,6 +432,123 @@ class Settings(QDialog):
             QMessageBox.warning(self, "Settings were not saved", str(exc))
 
 
+class ScoreFolderDialog(QDialog):
+    def __init__(self, root: Path, scores: Path, folders: list[Path], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Choose score folder")
+        self.root, self.scores, self.selected_path = root, scores, None
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Choose a folder for this batch of scores and MIDI files."))
+        self.folders = QComboBox()
+        self.folders.addItem("Scores (root folder)", scores)
+        for folder in folders:
+            self.folders.addItem(str(folder.relative_to(scores)), folder)
+        layout.addWidget(self.folders)
+        self.new_folder = QLineEdit()
+        self.new_folder.setPlaceholderText("New subfolder inside the selected folder (optional)")
+        layout.addWidget(self.new_folder)
+        self.preview_path = QLabel()
+        self.preview_path.setTextFormat(Qt.TextFormat.PlainText)
+        self.preview_path.setWordWrap(True)
+        layout.addWidget(self.preview_path)
+        self.folders.currentIndexChanged.connect(self.preview)
+        self.new_folder.textChanged.connect(self.preview)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Use folder")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.preview()
+        self.resize(560, 180)
+
+    def target(self):
+        path = self.folders.currentData()
+        if self.new_folder.text().strip():
+            path /= safe_relative(self.new_folder.text().strip())
+        if not path.is_relative_to(self.scores):
+            raise ValueError("Score folder must remain beneath Scores.")
+        validate_target(self.root, path)
+        return path
+
+    def preview(self):
+        try:
+            self.preview_path.setText(str(self.target()))
+        except ValueError as exc:
+            self.preview_path.setText(str(exc))
+
+    def accept(self):
+        try:
+            path = self.target()
+            path.mkdir(parents=True, exist_ok=True)
+            validate_target(self.root, path)
+            self.selected_path = path
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Cannot use score folder", str(exc))
+            return
+        super().accept()
+
+
+class PresetNameDialog(QDialog):
+    def __init__(self, config, package, selected="auto", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Identify preset plugin")
+        self.package = package
+        self.wrapper = bool(package.plugin_name and package.plugin_name.casefold() in ("fruity wrapper", "fruit wrapper"))
+        layout = QVBoxLayout(self)
+        label = QLabel(f"Plugin name needed for {package.source.name}")
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(label)
+        self.names = QComboBox()
+        self.names.setEditable(True)
+        self.names.addItem("")
+        known = {name for name in config.extra.get("preset_name_history", []) if isinstance(name, str)}
+        for d in config.destinations:
+            if d.extra.get("plugin_name"):
+                known.add(d.extra["plugin_name"])
+            elif d.id.startswith("preset-"):
+                known.add(d.name.replace(" (Effect)", "").replace(" (Generator)", ""))
+        self.names.addItems(sorted(name for name in known if isinstance(name, str) and name.strip() and name.casefold() not in ("fruity wrapper", "fruit wrapper")))
+        self.names.setEditText(package.hosted_plugin_name or "")
+        layout.addWidget(self.names)
+        if package.display_name:
+            channel = QLabel(f"Channel name: {package.display_name}")
+            channel.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(channel)
+        self.category = QComboBox()
+        self.category.addItem("Generator", "generator")
+        self.category.addItem("Effect", "effect")
+        self.category.setCurrentIndex(1 if package.plugin_kind == "effect" or selected == "effect" else 0)
+        layout.addWidget(self.category)
+        if self.wrapper:
+            layout.addWidget(QLabel("Folder name: Fruity Wrapper - <plugin name>"))
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.plugin_name = None
+        self.resize(500, 180)
+
+    def accept(self):
+        try:
+            self.plugin_name = formatted_plugin_name(self.names.currentText(), self.wrapper)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Plugin name required", str(exc))
+            return
+        super().accept()
+
+
+def formatted_plugin_name(name: str, wrapper: bool) -> str:
+    name = name.strip()
+    if wrapper:
+        for prefix in ("Fruity Wrapper - ", "Fruit Wrapper - "):
+            if name.casefold().startswith(prefix.casefold()):
+                name = name[len(prefix):].strip()
+                break
+    if not name or name.casefold() in ("fruity wrapper", "fruit wrapper") or len(safe_relative(name).parts) != 1:
+        raise ValueError("Enter a plugin name without folder separators.")
+    return "Fruity Wrapper - " + name if wrapper else name
+
+
 class PluginLocationDialog(QDialog):
     def __init__(self, config: Config, plugin_name: str, candidates: list[Candidate], parent=None, *, plugin_kind: str | None = None):
         super().__init__(parent)
@@ -601,12 +719,13 @@ class RoutingDialog(QDialog):
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = package_choices(config, pkg) if pkg.plugin_name or pkg.has_scripts else []
+                suggested = package_choices(config, pkg) if pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:
                     combo.setCurrentIndex(index)
-                elif combo.count() == 2 and not (pkg.has_scripts and not pkg.script_kind and not explicit):
+                elif combo.count() == 2 and not (pkg.has_scripts and not pkg.script_kind and not explicit) and not (
+                        not explicit and not pkg.plugin_name and any(f.suffix.casefold() in (".fxp", ".h2p") for f in pkg.planned_files)):
                     combo.setCurrentIndex(1)
             mode.currentIndexChanged.connect(populate)
             populate(0)
@@ -948,11 +1067,16 @@ class MainWindow(QMainWindow):
         except (ValueError, OSError) as exc:
             QMessageBox.warning(self, "Location was not added", str(exc))
 
-    def add_plugin_location(self, name: str, path: Path, *, select: bool = False):
+    def add_plugin_location(self, name: str, path: Path, *, select: bool = False, plugin_kind: str | None = None):
+        from .catalog import PLUGIN_PRESETS, PLUGIN_EXTENSIONS
         validate_target(path, path)
         trial = copy.deepcopy(self.config)
-        destination = Destination(str(uuid.uuid4()), name, [".fst"], path=str(path),
+        extensions = next((list(PLUGIN_EXTENSIONS.get(id, (".fst",))) for id, plugin, _, _ in PLUGIN_PRESETS
+                           if plugin.casefold() == name.casefold()), [".fst"])
+        destination = Destination(str(uuid.uuid4()), name, extensions, path=str(path),
                                   extra={"plugin_name": name})
+        if plugin_kind:
+            destination.extra["plugin_kind"] = plugin_kind
         for kind in ("user_data", "shared_data", "fl_install"):
             raw = trial.roots.get(kind)
             if raw and path.is_relative_to(Path(raw)):
@@ -1002,7 +1126,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Repair configuration first", self.config_error)
             return
         self.last_dropped_path = paths[-1].absolute()
-        self.last_drop_label.setText(f"Detecting plugin…: {self.last_dropped_path.name}")
+        label = "Score/MIDI file" if self.last_dropped_path.suffix.casefold() in (".fsc", ".mid", ".midi") else "Detecting plugin…"
+        self.last_drop_label.setText(f"{label}: {self.last_dropped_path.name}")
         self.last_drop_label.setToolTip(self.last_drop_label.text())
         self.details.clear()
         self.pending_skipped = 0
@@ -1010,17 +1135,31 @@ class MainWindow(QMainWindow):
         self.status.setText("Inspecting sources…")
         def inspect(worker):
             packages, errors = [], []
+            from .fxp import InstalledPluginLookup
+            user_data = self.config.roots.get("user_data")
+            fxp_lookup = InstalledPluginLookup(Path(user_data) if user_data else None, worker.cancel)
             for path in paths:
                 try:
-                    package = scan(path.absolute(), self.config.zip_limits, worker.cancel)
+                    package = scan(path.absolute(), self.config.zip_limits, worker.cancel, fxp_lookup)
                     packages.extend(fst_package_groups(package) if selection == "auto" else [package])
                 except Cancelled:
                     raise
                 except Exception as exc:
                     errors.append(f"Failed to inspect {path}: {exc}")
             packages = group_loose_scripts(packages, worker.cancel)
+            scores = next((d for d in self.config.destinations if d.id == "scores" and d.enabled), None)
+            if scores and any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for p in packages for f in p.planned_files):
+                try:
+                    root, base = resolve(self.config, scores)
+                    validate_target(root, base)
+                    folders = sorted((p for p in base.iterdir() if not is_link(p) and p.is_dir()),
+                                     key=lambda p: p.name.casefold()) if base.is_dir() else []
+                    for package in packages:
+                        package.score_subfolders = folders
+                except (ValueError, OSError) as exc:
+                    errors.append(f"Cannot inspect score folders: {exc}")
             names = list({p.plugin_name.casefold(): p.plugin_name for p in packages
-                          if selection == "auto" and p.plugin_name and not any(
+                          if selection == "auto" and p.plugin_name and not needs_plugin_name(p) and not any(
                               matches_plugin(d, p.plugin_name, p.plugin_kind, p.fst_type) and d.accepts(p.route_path)
                               for d in self.config.destinations)}.values())
             if names:
@@ -1030,6 +1169,13 @@ class MainWindow(QMainWindow):
         self.start_worker(inspect, lambda result: self.scanned(result, selection))
 
     def scanned(self, result, selection):
+        if not isinstance(result, Exception) and selection in ("auto", "generator", "effect"):
+            packages, errors, search = result
+            had_generic = any(needs_plugin_name(p) for p in packages)
+            packages = self.resolve_preset_identities(packages, selection, errors)
+            result = packages, errors, search
+            if had_generic and selection in ("generator", "effect"):
+                selection = "auto"
         if self.last_dropped_path is not None:
             plugin = None
             if not isinstance(result, Exception):
@@ -1039,7 +1185,8 @@ class MainWindow(QMainWindow):
                                  (p.source == self.last_dropped_path.parent and Path(self.last_dropped_path.name) in p.planned_files))
                              and (p.plugin_name or p.has_scripts)))
                 plugin = ", ".join(names) or None
-            self.last_drop_label.setText(f"{plugin or 'Plugin not identified'}: {self.last_dropped_path.name}")
+            label = "Score/MIDI file" if self.last_dropped_path.suffix.casefold() in (".fsc", ".mid", ".midi") else plugin or "Plugin not identified"
+            self.last_drop_label.setText(f"{label}: {self.last_dropped_path.name}")
             self.last_drop_label.setToolTip(self.last_drop_label.text())
         if isinstance(result, Exception):
             self.status.setText("Inspection cancelled." if isinstance(result, Cancelled) else str(result))
@@ -1057,6 +1204,8 @@ class MainWindow(QMainWindow):
                 kind = f" ({p.plugin_kind.title()})" if p.plugin_kind else ""
                 state = " — Channel state" if p.fst_type == "channel" else ""
                 self.details.appendPlainText(f"Identified plugin: {p.source.name} → {p.plugin_name}{kind}{state}")
+                if p.display_name:
+                    self.details.appendPlainText(f"Channel name: {p.display_name}")
         skipped_plugins = set()
         self.set_busy(True)
         try:
@@ -1093,7 +1242,7 @@ class MainWindow(QMainWindow):
                     self.details.appendPlainText(f"Skipped plugin location choice: {p.source.name}")
             packages = [p for p in packages if not p.plugin_name or p.plugin_name.casefold() not in skipped_plugins]
         if not packages:
-            self.status.setText(f"No imports ready. {self.pending_skipped} skipped; {len(errors)} source(s) failed inspection; see details.")
+            self.status.setText(errors[0] if errors else f"No imports ready. {self.pending_skipped} skipped.")
             return
         jobs = []
         review = False
@@ -1136,12 +1285,110 @@ class MainWindow(QMainWindow):
         if not jobs:
             self.status.setText(f"No files selected. {self.pending_skipped} skipped; {len(errors)} failed inspections.")
             return
+        if not self.choose_score_subfolder(jobs, selection):
+            self.status.setText("Import cancelled before copying.")
+            return
         self.last_target = jobs[0].target
         if jobs[0].package.zip_root_folder and not jobs[0].keep_zip:
             self.last_target /= jobs[0].package.zip_root_folder
         self.open_button.setEnabled(True)
         conflict = (lambda _path: "replace") if self.config.always_replace_duplicates else None
         self.start_worker(lambda w: run_jobs(jobs, self.config.zip_limits, w.cancel, conflict or w.ask_conflict, w.progress.emit), self.transferred)
+
+    def choose_score_subfolder(self, jobs, selection="auto"):
+        if selection not in ("auto", "scores"):
+            return True
+        scores = next((d for d in self.config.destinations if d.id == "scores"), None)
+        if not scores:
+            return True
+        try:
+            root, base = resolve(self.config, scores)
+        except ValueError:
+            return True
+        score_jobs = [j for j in jobs if not j.keep_zip and j.target.is_relative_to(base) and
+                      any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in j.package.planned_files)]
+        folders = next((j.package.score_subfolders for j in score_jobs if j.package.score_subfolders), [])
+        if not folders:
+            return True
+        dialog = ScoreFolderDialog(root, base, folders, self)
+        accepted = dialog.exec()
+        selected_path = dialog.selected_path
+        dialog.deleteLater()
+        if not accepted or selected_path is None:
+            return False
+        for job in score_jobs:
+            job.target = selected_path / job.target.relative_to(base)
+        return True
+
+    def resolve_preset_identities(self, packages, selection, errors):
+        result = []
+        self.set_busy(True)
+        try:
+            for p in packages:
+                if not needs_plugin_name(p):
+                    result.append(p)
+                    continue
+                wrapper = bool(p.plugin_name and p.plugin_name.casefold() in ("fruity wrapper", "fruit wrapper"))
+                kind = p.plugin_kind or (selection if selection in ("generator", "effect") else None)
+                name = None
+                if wrapper and p.hosted_plugin_name and kind:
+                    try:
+                        name = formatted_plugin_name(p.hosted_plugin_name, True)
+                    except ValueError:
+                        pass
+                if not name:
+                    dialog = PresetNameDialog(self.config, p, selection, self)
+                    accepted = dialog.exec()
+                    name, kind = dialog.plugin_name, dialog.category.currentData()
+                    dialog.deleteLater()
+                    if not accepted or not name:
+                        self.pending_skipped += len(p.planned_files)
+                        continue
+                try:
+                    existing = [d for d in self.config.destinations if matches_plugin(d, name, kind, p.fst_type)]
+                    if not existing:
+                        destination = next((d for d in self.config.destinations if d.id == kind),
+                                           Destination(kind, kind, [".fst"], "user_data",
+                                                       "Presets/Plugin presets/" + ("Effects" if kind == "effect" else "Generators")))
+                        root, base = resolve(self.config, destination)
+                        validate_root(root, destination.root)
+                        target = base / safe_relative(name)
+                        validate_target(root, target)
+                        target.mkdir(parents=True, exist_ok=True)
+                        validate_target(root, target)
+                        self.add_plugin_location(name, target, plugin_kind=kind)
+                    preset_extensions = {f.suffix.casefold() for f in p.planned_files} & {".fxp", ".h2p"}
+                    for dest in self.config.destinations:
+                        if matches_plugin(dest, name, kind, p.fst_type):
+                            dest.extensions.extend(sorted(preset_extensions - set(dest.extensions)))
+                    history = self.config.extra.get("preset_name_history", [])
+                    history = [n for n in history if isinstance(n, str) and n.casefold() != name.casefold()]
+                    self.config.extra["preset_name_history"] = (history + [name])[-256:]
+                    if self.config_path.exists():
+                        load(self.config_path)
+                    save(self.config, self.config_path)
+                    p.plugin_name, p.plugin_kind = name, kind
+                    if p.is_fst_group:
+                        p.group_name = name
+                    result.append(p)
+                except (ValueError, OSError, StopIteration) as exc:
+                    errors.append(f"Cannot set preset location for {p.source.name}: {exc or 'Configure Generator and Effect destinations in Settings.'}")
+                    self.pending_skipped += len(p.planned_files)
+        finally:
+            self.set_busy(False)
+        merged, groups = [], {}
+        for package in result:
+            if not package.is_fst_group or not package.plugin_name:
+                merged.append(package)
+                continue
+            key = (package.source, package.plugin_name, package.plugin_kind, package.fst_type)
+            if key in groups:
+                first = groups[key]
+                first.selected_files = list(dict.fromkeys(first.planned_files + package.planned_files))
+            else:
+                groups[key] = package
+                merged.append(package)
+        return merged
 
     def conflict(self, path):
         worker = self.worker
@@ -1191,6 +1438,16 @@ class MainWindow(QMainWindow):
 def create_application():
     set_windows_app_id()
     app = QApplication(sys.argv)
+    # Python can otherwise collect cyclic Qt widget references on whichever
+    # worker triggers the allocation threshold. Qt widgets must be destroyed
+    # on the GUI thread, so perform cyclic cleanup here instead.
+    automatic_gc = gc.isenabled()
+    gc.disable()
+    app.gc_timer = QTimer(app)
+    app.gc_timer.timeout.connect(gc.collect)
+    app.gc_timer.start(1000)
+    if automatic_gc:
+        app.destroyed.connect(gc.enable)
     app.setWindowIcon(QIcon(str(APP_IMAGE)))
     app.setApplicationName("FLDropper")
     app.setOrganizationName("FLDropper")

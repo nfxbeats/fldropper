@@ -10,6 +10,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Callable
+from .catalog import NATIVE_PRESET_PLUGINS
 
 
 class TransferError(ValueError):
@@ -83,6 +84,11 @@ class Package:
     zip_root_folder: Path | None = None
     fst_type: str | None = None
     file_fst_types: dict[Path, str | None] = field(default_factory=dict)
+    display_name: str | None = None
+    file_display_names: dict[Path, str | None] = field(default_factory=dict)
+    score_subfolders: list[Path] = field(default_factory=list)
+    hosted_plugin_name: str | None = None
+    file_hosted_plugin_names: dict[Path, str | None] = field(default_factory=dict)
 
     @property
     def planned_files(self) -> list[Path]:
@@ -99,6 +105,10 @@ class Package:
 
     @property
     def route_path(self) -> Path:
+        if self.is_fst_group and any(p.suffix.casefold() == ".h2p" for p in self.planned_files) and not any(p.suffix.casefold() == ".fst" for p in self.planned_files):
+            return Path("preset.h2p")
+        if self.is_fst_group and any(p.suffix.casefold() == ".fxp" for p in self.planned_files) and not any(p.suffix.casefold() == ".fst" for p in self.planned_files):
+            return Path("preset.fxp")
         return Path("preset.fst") if self.is_fst_group else self.source
 
     @property
@@ -147,7 +157,7 @@ def inspect_zip(source: Path, limits: dict[str, int], cancel: threading.Event) -
     return paths
 
 
-def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Package:
+def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_lookup=None) -> Package:
     check_cancel(cancel)
     checked_ancestors(source)
     if source.is_file() and source.suffix.casefold() == ".zip":
@@ -158,6 +168,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
             plugins = {}
             kinds = {}
             fst_types = {}
+            display_names = {}
+            hosted_names = {}
             scripts = {}
             from .scripts import MAX_SCRIPT_BYTES, inspect_script, classify_scripts
             metadata_bytes = 0
@@ -173,6 +185,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
                     metadata = inspect_bytes(prefix, info.file_size)
                     plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
                     fst_types[relative] = metadata.fst_type
+                    display_names[relative] = metadata.display_name
+                    hosted_names[relative] = metadata.hosted_plugin_name
                 elif not info.is_dir() and relative.suffix.casefold() in (".py", ".pyscript"):
                     with archive.open(info) as stream:
                         prefix = stream.read(min(MAX_SCRIPT_BYTES + 1, info.file_size))
@@ -180,9 +194,35 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
                     if metadata_bytes > limits["bytes"]:
                         raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
                     scripts[relative] = inspect_script(prefix)
+                elif not info.is_dir() and relative.suffix.casefold() in NATIVE_PRESET_PLUGINS:
+                    plugins[relative], kinds[relative] = NATIVE_PRESET_PLUGINS[relative.suffix.casefold()], "generator"
+                elif not info.is_dir() and relative.suffix.casefold() == ".h2p":
+                    from .h2p import HEADER_BYTES as H2P_HEADER_BYTES, inspect_bytes as inspect_h2p
+                    with archive.open(info) as stream:
+                        prefix = stream.read(min(H2P_HEADER_BYTES, info.file_size))
+                    metadata_bytes += len(prefix)
+                    if metadata_bytes > limits["bytes"]:
+                        raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
+                    metadata = inspect_h2p(prefix, fxp_lookup)
+                    plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
+                    fst_types[relative] = metadata.fst_type
+                    hosted_names[relative] = metadata.hosted_plugin_name
+                elif not info.is_dir() and relative.suffix.casefold() == ".fxp":
+                    from .fxp import HEADER_BYTES, inspect_bytes as inspect_fxp
+                    with archive.open(info) as stream:
+                        prefix = stream.read(HEADER_BYTES)
+                    metadata_bytes += len(prefix)
+                    if metadata_bytes > limits["bytes"]:
+                        raise TransferError("ZIP metadata scan exceeded expanded byte limit.")
+                    metadata = inspect_fxp(prefix, info.file_size)
+                    if fxp_lookup is not None:
+                        metadata = fxp_lookup.resolve(metadata)
+                        fst_types[relative] = metadata.fst_type
+                        hosted_names[relative] = metadata.hosted_plugin_name
+                    plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
         kind, notes = classify_scripts(scripts) if scripts else (None, [])
         package = Package(source, files, is_zip=True, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds,
-                          has_scripts=bool(scripts), script_kind=kind, script_notes=notes, file_fst_types=fst_types)
+                          has_scripts=bool(scripts), script_kind=kind, script_notes=notes, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names)
         top_levels = {path.parts[0] for path in [*files, *directories]}
         if len(top_levels) == 1 and all(len(path.parts) > 1 for path in files):
             package.zip_root_folder = Path(next(iter(top_levels)))
@@ -192,7 +232,22 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
         safe_relative(source.name)
         from .fst import inspect_file
         metadata = inspect_file(source)
-        package = Package(source, [Path(source.name)], plugin_name=metadata.plugin_name, plugin_kind=metadata.plugin_kind, fst_type=metadata.fst_type)
+        package = Package(source, [Path(source.name)], plugin_name=metadata.plugin_name, plugin_kind=metadata.plugin_kind, fst_type=metadata.fst_type, display_name=metadata.display_name, hosted_plugin_name=metadata.hosted_plugin_name)
+        if source.suffix.casefold() in NATIVE_PRESET_PLUGINS:
+            package.plugin_name, package.plugin_kind = NATIVE_PRESET_PLUGINS[source.suffix.casefold()], "generator"
+        if source.suffix.casefold() == ".h2p":
+            from .h2p import inspect_file as inspect_h2p_file
+            metadata = inspect_h2p_file(source, fxp_lookup)
+            package.plugin_name, package.plugin_kind = metadata.plugin_name, metadata.plugin_kind
+            package.fst_type, package.hosted_plugin_name = metadata.fst_type, metadata.hosted_plugin_name
+        if source.suffix.casefold() == ".fxp":
+            from .fxp import inspect_file as inspect_fxp_file
+            metadata = inspect_fxp_file(source)
+            if fxp_lookup is not None:
+                metadata = fxp_lookup.resolve(metadata)
+                package.fst_type = metadata.fst_type
+                package.hosted_plugin_name = metadata.hosted_plugin_name
+            package.plugin_name, package.plugin_kind = metadata.plugin_name, metadata.plugin_kind
         if source.suffix.casefold() in (".py", ".pyscript"):
             inspect_script_files(package)
             if package.script_kind == "hardware":
@@ -220,6 +275,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
     plugins = {}
     kinds = {}
     fst_types = {}
+    display_names = {}
+    hosted_names = {}
     for relative in files:
         check_cancel(cancel)
         if relative.suffix.casefold() == ".fst":
@@ -227,7 +284,25 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event) -> Packa
             metadata = inspect_file(source / relative)
             plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
             fst_types[relative] = metadata.fst_type
-    package = Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds, file_fst_types=fst_types)
+            display_names[relative] = metadata.display_name
+            hosted_names[relative] = metadata.hosted_plugin_name
+        elif relative.suffix.casefold() in NATIVE_PRESET_PLUGINS:
+            plugins[relative], kinds[relative] = NATIVE_PRESET_PLUGINS[relative.suffix.casefold()], "generator"
+        elif relative.suffix.casefold() == ".h2p":
+            from .h2p import inspect_file as inspect_h2p_file
+            metadata = inspect_h2p_file(source / relative, fxp_lookup)
+            plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
+            fst_types[relative] = metadata.fst_type
+            hosted_names[relative] = metadata.hosted_plugin_name
+        elif relative.suffix.casefold() == ".fxp":
+            from .fxp import inspect_file as inspect_fxp_file
+            metadata = inspect_fxp_file(source / relative)
+            if fxp_lookup is not None:
+                metadata = fxp_lookup.resolve(metadata)
+                fst_types[relative] = metadata.fst_type
+                hosted_names[relative] = metadata.hosted_plugin_name
+            plugins[relative], kinds[relative] = metadata.plugin_name, metadata.plugin_kind
+    package = Package(source, files, skipped, directories=directories, file_plugins=plugins, file_plugin_kinds=kinds, file_fst_types=fst_types, file_display_names=display_names, file_hosted_plugin_names=hosted_names)
     inspect_script_files(package, cancel)
     return package
 

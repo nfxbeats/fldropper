@@ -19,7 +19,7 @@ Setup creates or refreshes a Windows desktop shortcut with the bundled FL Droppe
 
 1. On launch, FL Dropper automatically looks for missing folder settings and saves unique valid matches. Saved paths are kept; no detection dialog is shown. If a folder is missing or several matches exist, open **Settings** to choose it. You can also click **Auto detect folders** to retry.
 2. Check the detected folders. Empty fields are filled when there is one valid match; if several installations are found, choose the one you use. Saved folder choices are kept. You can also browse manually.
-3. Choose destinations for content you organize yourself, such as samples, MIDI files, and projects.
+3. Choose destinations for content you organize yourself, such as samples and projects.
 4. Click **Save**.
 
 The folder settings mean:
@@ -40,9 +40,24 @@ Prefer user-data destinations for your own presets so they carry over when you u
 
 **Auto Detect** handles each loose file separately. Recognized `.fst` presets go to the matching plugin's configured folder. If the plugin or destination cannot be determined, FL Dropper asks you to choose.
 
+The generic **Generator presets** and **Effect presets** destinations default to `Presets/Plugin presets/Generators` and `Presets/Plugin presets/Effects` inside User Data Folder.
+
+For wrapped plugins, the factory plugin name from VST metadata is used automatically. For example, Strum GS-2 uses `Generators/Fruity Wrapper - Strum GS-2` even if its channel was renamed to `Gtr Lead1`. The channel label appears separately in details. If the factory name is unavailable, choose a previously used plugin name or type one; the channel label is never assumed to be the plugin identity. Wrapped-plugin folder names always use **Fruity Wrapper - <plugin name>**. You choose Generator or Effect when the file does not identify its category. Named locations are remembered for future imports.
+
 Patcher presets are identified as **Effect** or **Generator** and go to their respective `Effects/Patcher` or `Generators/Patcher` preset folders. Both destinations appear in Settings. If a preset does not include enough information to identify its type, you choose the destination.
 
 FPC kits use `Presets/Plugin presets/Generators/FPC` inside User Data Folder. The preset and its accompanying samples are copied together into the kit folder.
+
+Morphine presets in either `.fst` or native `.mrp` format use the same destination: `Presets/Plugin presets/Generators/Morphine` inside User Data Folder.
+
+Sawer presets in `.fst` or `.sawer` format use `Presets/Plugin presets/Generators/Sawer` inside User Data Folder.
+
+Toxic Biohazard presets in `.fst`, `.txd`, or `.tbio` format use `Presets/Plugin presets/Generators/Toxic Biohazard` inside User Data Folder.
+
+FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder’s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin name and category, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
+
+H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the plugin name and category for the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he’s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
+
 
 FST headers distinguish **channel states** from **plugin presets**. **3x Osc channel states** are an exception to the User Data preference: they go to `Data/Patches/Channel presets/3x Osc` inside FL Studio Install Folder. The detected channel-state type appears in the highlighted filename and import details. Installation-folder permissions may prevent copying; the app reports the failing path.
 
@@ -73,6 +88,10 @@ Unidentified scripts, helpers without an entry point, and packages containing di
 
 Hardware entry points must be directly inside their controller folder. ZIPs with a single enclosing controller folder are handled automatically. For deeper nesting or multiple controller folders, extract the ZIP and drop each folder containing `device_*.py`. FL Dropper flags these deeper layouts rather than automatically installing them at the wrong depth.
 
+### Scores and MIDI
+
+`.fsc`, `.mid`, and `.midi` files use **Scores**, which defaults to `Presets/Scores` inside your FL Studio User Data Folder. If Scores has subfolders, an import asks which folder to use. Choose the Scores root, an existing subfolder, or enter a new subfolder name to create it. The choice applies to all scores in that import. With no existing subfolders, scores copy directly into Scores. Folder and ZIP imports preserve their package structure inside the chosen location.
+
 ### Duplicate filenames
 
 If a destination already contains a file with the same name, choose **Replace**, **Skip**, **Keep both**, or **Cancel remaining**. **Keep both** adds a number to the new filename. You can apply your choice to the remaining conflicts in that import.
@@ -83,7 +102,7 @@ In Settings, **Always replace duplicate files (without prompting)** enables auto
 
 Click the **folder-plus icon**, choose a folder, and enter the plugin name. The location is saved in the dropdown for future use.
 
-Use **Settings** to rename, edit, disable, or delete destinations and change their accepted file extensions. A destination with no extensions accepts any file when selected manually. Samples, MIDI files, and projects can go into folders of your choice.
+Use **Settings** to rename, edit, disable, or delete destinations and change their accepted file extensions. A destination with no extensions accepts any file when selected manually. Samples and projects can go into folders of your choice. The Scores destination is also editable.
 
 ## Update
 

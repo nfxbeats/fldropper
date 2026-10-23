@@ -1,5 +1,5 @@
 {
-  "catalog_revision": 6,
+  "catalog_revision": 13,
   "version": 1,
   "roots": {
     "user_data": "",
@@ -11,8 +11,8 @@
       "id": "piano",
       "name": "Piano Roll scripts",
       "extensions": [
-        ".pyscript",
-        ".py"
+        ".py",
+        ".pyscript"
       ],
       "root": "user_data",
       "path": "Settings/Piano roll scripts",
@@ -23,8 +23,8 @@
       "id": "edison",
       "name": "Edison audio scripts",
       "extensions": [
-        ".pyscript",
-        ".py"
+        ".py",
+        ".pyscript"
       ],
       "root": "user_data",
       "path": "Settings/Audio scripts",
@@ -70,8 +70,8 @@
       "extensions": [
         ".fst"
       ],
-      "root": "absolute",
-      "path": "",
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators",
       "enabled": true,
       "automatic": true
     },
@@ -81,8 +81,8 @@
       "extensions": [
         ".fst"
       ],
-      "root": "absolute",
-      "path": "",
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Effects",
       "enabled": true,
       "automatic": true
     },
@@ -90,12 +90,12 @@
       "id": "samples",
       "name": "Samples (choose an organization folder)",
       "extensions": [
-        ".wav",
         ".aif",
         ".aiff",
+        ".flac",
         ".mp3",
         ".ogg",
-        ".flac"
+        ".wav"
       ],
       "root": "absolute",
       "path": "",
@@ -103,14 +103,15 @@
       "automatic": true
     },
     {
-      "id": "midi",
-      "name": "MIDI files (choose a folder)",
+      "id": "scores",
+      "name": "Scores",
       "extensions": [
+        ".fsc",
         ".mid",
         ".midi"
       ],
-      "root": "absolute",
-      "path": "",
+      "root": "user_data",
+      "path": "Presets/Scores",
       "enabled": true,
       "automatic": true
     },
@@ -204,6 +205,18 @@
       "automatic": true
     },
     {
+      "id": "preset-morphine",
+      "name": "Morphine",
+      "extensions": [
+        ".fst",
+        ".mrp"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Morphine",
+      "enabled": true,
+      "automatic": true
+    },
+    {
       "id": "preset-ogun",
       "name": "Ogun",
       "extensions": [
@@ -240,10 +253,23 @@
       "id": "preset-poizone",
       "name": "PoiZone",
       "extensions": [
-        ".fst"
+        ".fst",
+        ".fxp"
       ],
       "root": "user_data",
       "path": "Presets/Plugin presets/Generators/PoiZone",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-sawer",
+      "name": "Sawer",
+      "extensions": [
+        ".fst",
+        ".sawer"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Sawer",
       "enabled": true,
       "automatic": true
     },
@@ -255,6 +281,19 @@
       ],
       "root": "user_data",
       "path": "Presets/Plugin presets/Generators/Sytrus",
+      "enabled": true,
+      "automatic": true
+    },
+    {
+      "id": "preset-toxic-biohazard",
+      "name": "Toxic Biohazard",
+      "extensions": [
+        ".fst",
+        ".tbio",
+        ".txd"
+      ],
+      "root": "user_data",
+      "path": "Presets/Plugin presets/Generators/Toxic Biohazard",
       "enabled": true,
       "automatic": true
     },

@@ -9,10 +9,52 @@ import struct
 
 from construct import ConstructError
 from pyflp._events import AsciiEvent, UnicodeEvent
-from pyflp.plugin import WrapperEvent, _WrapperFlags
+from pyflp.plugin import WrapperEvent, VSTPluginEvent, _WrapperFlags
 from pyflp.project import FileFormat
 
 MAX_PREFIX = 64 * 1024
+WRAPPER_NAMES = {"fruity wrapper", "fruit wrapper"}
+
+
+def _hosted_plugin_id(payload: bytes) -> int | None:
+    if len(payload) < 4 or struct.unpack_from("<I", payload)[0] not in (8, 10, 12):
+        return None
+    cursor = 4
+    while cursor + 12 <= len(payload):
+        event, size = struct.unpack_from("<IQ", payload, cursor)
+        cursor += 12
+        if cursor + size > len(payload):
+            return None
+        if event == 51:
+            return int.from_bytes(payload[cursor:cursor + size], "little") if size == 4 else None
+        cursor += size
+    return None
+
+
+def _hosted_plugin_name(payload: bytes, declared_size: int) -> str | None:
+    """Read VST identity records, skipping the plugin's own state by length."""
+    if len(payload) < 4 or struct.unpack_from("<I", payload)[0] not in (8, 10, 12):
+        return None
+    cursor = 4
+    while cursor + 12 <= len(payload):
+        event, size = struct.unpack_from("<IQ", payload, cursor)
+        start = cursor
+        cursor += 12
+        if cursor + size > declared_size:
+            return None
+        if event == 54:  # PyFLP VSTPluginEvent Name: factory plugin name.
+            if not 0 < size <= 512 or cursor + size > len(payload):
+                return None
+            try:
+                # Decode only this metadata record through PyFLP. Do not parse,
+                # decompress, or search the potentially large State record.
+                parsed = VSTPluginEvent.STRUCT.parse(payload[:4] + payload[start:cursor + size])
+                name = parsed["events"][0]["data"].rstrip("\0")
+            except (ConstructError, UnicodeError, IndexError, KeyError, ValueError):
+                return None
+            return name if name and all(c.isprintable() for c in name) else None
+        cursor += size
+    return None
 
 
 def _has_version_banner(data: bytes, cursor: int, end: int) -> bool:
@@ -46,6 +88,14 @@ class FstMetadata:
     reason: str = ""
     plugin_kind: str | None = None
     fst_type: str | None = None
+    display_name: str | None = None
+    hosted_plugin_name: str | None = None
+
+    vst2_id: int | None = None
+
+    @property
+    def channel_name(self) -> str | None:
+        return self.display_name
 
 
 def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
@@ -57,12 +107,15 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
     name_offset = None
     plugin_kind = None
     fst_type = None
+    display_name = None
+    hosted_plugin_name = None
+    vst2_id = None
 
     def unknown(reason: str) -> FstMetadata:
-        return FstMetadata(plugin_name, version_text, encoding, name_offset, reason, plugin_kind, fst_type)
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, reason, plugin_kind, fst_type, display_name, hosted_plugin_name, vst2_id)
 
     def identified() -> FstMetadata:
-        return FstMetadata(plugin_name, version_text, encoding, name_offset, plugin_kind=plugin_kind, fst_type=fst_type)
+        return FstMetadata(plugin_name, version_text, encoding, name_offset, plugin_kind=plugin_kind, fst_type=fst_type, display_name=display_name, hosted_plugin_name=hosted_plugin_name, vst2_id=vst2_id)
 
     try:
         if data[:4] != b"FLhd" or len(data) < 22:
@@ -83,9 +136,10 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
             event = data[cursor]
             cursor += 1
             if event == 213:
-                if plugin_name:
+                if plugin_name and plugin_name.casefold() not in WRAPPER_NAMES:
                     return identified()
-                return unknown("Reached opaque plugin state before outer plugin name")
+                if not plugin_name:
+                    return unknown("Reached opaque plugin state before outer plugin name")
             if event < 192:
                 length = 1 if event < 64 else 2 if event < 128 else 4
                 if event == 172 and data[cursor:cursor + 4] == b"\x01\x01\x00\xc0":
@@ -107,6 +161,12 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                         break
                 else:
                     return unknown("Oversized event length varint")
+            if event == 213:
+                if cursor + length > 22 + size:
+                    return unknown("Wrapper data exceeds declared event chunk")
+                vst2_id = _hosted_plugin_id(data[cursor:min(cursor + length, end)])
+                hosted_plugin_name = _hosted_plugin_name(data[cursor:min(cursor + length, end)], length)
+                return identified() if hosted_plugin_name else unknown("Hosted plugin name unavailable; channel label is not a plugin identity")
             if cursor + length > end:
                 return unknown("Event exceeds available metadata prefix")
             if event == 199:
@@ -135,15 +195,19 @@ def inspect_bytes(data: bytes, file_size: int | None = None) -> FstMetadata:
                 if not name or not all(32 <= ord(c) < 127 for c in name):
                     return unknown("Plugin name contains unsupported/control characters")
                 plugin_name, name_offset, encoding = name, cursor, selected_encoding
-                if plugin_kind:
-                    return identified()
+            if event == 203 and plugin_name and 2 <= length <= 512:
+                raw = data[cursor:cursor + length]
+                decoder = UnicodeEvent if encoding == "utf-16-le" else AsciiEvent
+                terminator = b"\x00\x00" if encoding == "utf-16-le" else b"\x00"
+                if raw.endswith(terminator):
+                    value = decoder.STRUCT.parse(raw)
+                    if value and all(c.isprintable() for c in value):
+                        display_name = value
             if event == 212 and length >= 18:
                 # PyFLP WrapperEvent: uint16 flags at payload offset 16;
                 # Generator is bit 4. Never inspect opaque plugin state.
                 flags = WrapperEvent.STRUCT.parse(data[cursor:cursor + length])["flags"]
                 plugin_kind = "generator" if flags & _WrapperFlags.Generator else "effect"
-                if plugin_name:
-                    return identified()
             cursor += length
     except (ValueError, struct.error, UnicodeError, ConstructError):
         return unknown("Invalid binary or text metadata")
