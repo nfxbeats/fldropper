@@ -1,4 +1,4 @@
-name: macOS install check
+name: macOS test
 on:
   workflow_dispatch:
 permissions:

@@ -165,6 +165,6 @@ Plugin metadata decoding uses [PyFLP](https://github.com/demberto/PyFLP). Setup 
 
 ### Checking macOS setup without a Mac
 
-A manually triggered **macOS install check** workflow is included in `.github/workflows/macos-install.yml`. After pushing the repository to GitHub, open **Actions → macOS install check → Run workflow**. It uses a real GitHub-hosted macOS runner to install dependencies, rebuild a broken environment, verify reuse and config preservation, and create a Qt window offscreen. No FL Studio installation is required. [GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners).
+A manually triggered **macOS test** workflow is included in `.github/workflows/macos-test.yaml`. After pushing the repository to GitHub, open **Actions → macOS test → Run workflow**. It uses a real GitHub-hosted macOS runner to install dependencies, rebuild a broken environment, verify reuse and config preservation, and create a Qt window offscreen. No FL Studio installation is required. [GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners).
 
 The workflow has not been run from this Windows development machine. It tests setup using preinstalled Python, not Homebrew installation on a clean Mac or the interactive Python installer. Finder launching, macOS permission dialogs, FL Studio paths, and actual imports still need a Mac user to verify. Windows shell simulations cannot establish macOS compatibility.
