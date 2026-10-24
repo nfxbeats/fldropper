@@ -1,4 +1,4 @@
-# FL Dropper
+<h1><img src="docs/images/FL_Dropper.png" alt="FL Dropper icon" width="40" align="top">FL Dropper</h1>
 
 Producer: **Nelson Fernandez Jr. (NFX @ Warbeats)**
 
@@ -6,23 +6,42 @@ Drop FL Studio presets, samples, scripts, projects, folders, or ZIP files into o
 
 ## Install on Windows
 
-1. Python 3.12 or newer is required. If missing, **setup.bat** calls **get-python.bat**, which asks before attempting installation through WinGet. If WinGet is unavailable, install Python from [python.org](https://www.python.org/downloads/) and enable **Add Python to PATH** if offered.
-2. Download this repository and extract the ZIP, or clone it. Keep the entire folder together in a location you can write to, such as your Documents folder.
-3. Double-click **setup.bat**. An internet connection is needed to download the app's dependencies. Wait for **Setup complete**.
-4. Double-click the **FL Dropper** desktop shortcut, or **run.bat**, to open FL Dropper.
+1. Download this repository and extract the ZIP, or clone it. Keep the entire folder together in a writable location, such as your Documents folder.
+2. Double-click **setup.bat**. Internet access is needed to install dependencies.
+3. If Python 3.12 or newer is missing, setup calls **get-python.bat** and asks before attempting a per-user Python 3.12 installation through WinGet. If WinGet is unavailable or installation fails, install Python from [python.org](https://www.python.org/downloads/), enable **Add Python to PATH** if offered, and rerun **setup.bat**.
+4. Wait for **Setup complete**, then double-click the **FL Dropper** desktop shortcut or **run.bat**.
 
-Optional: double-click **get-python.bat** to check for Python first. If Python 3.12 or newer is missing, it asks before attempting a per-user Python 3.12 installation through WinGet. If WinGet is unavailable or installation fails, it provides the manual download link. It does not run FL Dropper setup; afterward, run **setup.bat** yourself. Existing compatible Python installations are kept. WinGet may display license prompts. ([WinGet installation options](https://learn.microsoft.com/en-us/windows/package-manager/winget/install))
+You can run **get-python.bat** separately to check Python first. It prompts before installing anything; WinGet may also display license prompts. Existing compatible Python installations are kept.
 
-Setup reuses a working `.venv`. If it is broken, missing pip, or uses an incompatible Python, setup removes that app folder’s `.venv` and rebuilds it. Close FL Dropper before rerunning setup. Settings and other app files are preserved. Links or junctions inside `.venv` require manual removal.
+Setup installs everything the app needs. If setup needs repair, close FL Dropper and run **setup.bat** again. Settings and other app files are preserved.
 
-After setup, use **run.bat** whenever you want to open the app. You do not need to activate Python or enter commands.
+Setup also creates or refreshes the desktop shortcut. If you move the app folder, rerun **setup.bat** to update it. Keep the icon and other app files together in that folder. If shortcut creation fails, **run.bat** remains available.
 
-Setup creates or refreshes a Windows desktop shortcut with the bundled FL Dropper icon. Its target, working folder, and icon paths come from the current project location. If you move the project folder, rerun **setup.bat** to update the shortcut. The icon file stays in the project folder; it is referenced by the shortcut, not embedded in it. If shortcut creation fails, setup reports it and **run.bat** remains available.
+## Install on macOS (experimental)
+
+1. Download and extract the repository into a writable folder. Keep the entire folder together, including **FL Dropper.app** and the `scripts` folder.
+2. Open Terminal, type `cd `, drag the extracted app folder into Terminal, and press Return.
+3. Run:
+
+   ```bash
+   bash setup.command
+   ```
+
+4. If Python 3.12 or newer is missing, setup calls **get-python.command**. With Homebrew already installed, it asks before installing Python 3.12. Without Homebrew, it offers to open the [official Python download page](https://www.python.org/downloads/macos/). Complete that installer, then rerun `bash setup.command`. The official installer may require an administrator password. Homebrew itself is not installed automatically.
+5. Wait for **Setup complete**, then double-click **FL Dropper.app** to launch without Terminal.
+
+Internet access is needed to install dependencies. You can run `bash get-python.command` separately to check Python first. Setup installs the app’s dependencies for you.
+
+Close FL Dropper before rerunning setup to repair or update it. Settings and other app files are preserved.
+
+Keep **FL Dropper.app** in the downloaded app folder. To put a shortcut elsewhere, create a Finder alias rather than moving the app launcher. For troubleshooting, run `bash run.command` in Terminal to see errors, or check `~/Library/Logs/FLDropper.log`.
+
+macOS support is experimental and has not been verified on a Mac. Automatic FL Studio folder discovery and installation-folder validation currently support Windows only. On macOS, configure writable user-data folders or absolute destinations manually in Settings.
 
 ## First-time setup
 
-1. On launch, FL Dropper automatically looks for missing folder settings and saves unique valid matches. Saved paths are kept; no detection dialog is shown. If a folder is missing or several matches exist, open **Settings** to choose it. You can also click **Auto detect folders** to retry.
-2. Check the detected folders. Empty fields are filled when there is one valid match; if several installations are found, choose the one you use. Saved folder choices are kept. You can also browse manually.
+1. Open **Settings** and check the detected FL Studio folders.
+2. Use **Auto detect folders** or browse if a folder is missing or incorrect.
 3. Choose destinations for content you organize yourself, such as samples and projects.
 4. Click **Save**.
 
@@ -30,79 +49,27 @@ The folder settings mean:
 
 | Setting | What to select |
 | --- | --- |
-| **FL Studio Install Folder** | Your FL Studio program folder, containing `FL64.exe` and `Plugins`. |
-| **Shared User Data Folder** | The Image-Line parent folder shown in FL Studio's File settings. Custom ZGameEditor Visualizer effects use this location. |
+| **FL Studio Install Folder** | Your FL Studio program folder. |
+| **Shared User Data Folder** | The Image-Line parent folder shown in FL Studio's File settings. |
 | **User Data Folder** | Read-only: the `FL Studio` subfolder inside Shared User Data. Updates automatically when you change the shared folder. |
 
 Prefer user-data destinations for your own presets so they carry over when you upgrade FL Studio. You only need to configure the folders used by your destinations.
 
-## Copy files
+## Usage of FL Dropper
 
 1. Leave the destination dropdown on **Auto Detect**, or select a destination yourself.
 2. Drop files, folders, or ZIP archives onto **Drop files here**. You can also click the panel to select files.
 3. Review any destination choices or folder/ZIP import summary, then confirm.
 
-**Auto Detect** handles each loose file separately. Recognized `.fst` presets go to the matching plugin's configured folder. If the plugin or destination cannot be determined, FL Dropper asks you to choose.
+<img src="docs/images/FL_Dropper_Main_Window.png" alt="FL Dropper Window" width="480">
 
-The generic **Generator presets** and **Effect presets** destinations default to `Presets/Plugin presets/Generators` and `Presets/Plugin presets/Effects` inside User Data Folder.
+**Auto Detect** chooses destinations for recognized content. Follow any prompts or error messages if an import cannot be identified.
 
-For wrapped plugins, the factory plugin name from VST metadata is used automatically. For example, Strum GS-2 uses `Generators/Fruity Wrapper - Strum GS-2` even if its channel was renamed to `Gtr Lead1`. The channel label appears separately in details. If the factory name is unavailable, choose a previously used plugin name or type one; the channel label is never assumed to be the plugin identity. Wrapped-plugin folder names always use **Fruity Wrapper - <plugin name>**. You choose Generator or Effect when the file does not identify its category. Named locations are remembered for future imports.
+Drop a complete folder or ZIP when presets or scripts need companion files such as samples, helpers, or images. To keep a package together in one place, select a destination before dropping it. Project ZIPs can be kept as ZIP files when offered.
 
-Patcher presets are identified as **Effect** or **Generator** and go to their respective `Effects/Patcher` or `Generators/Patcher` preset folders. Both destinations appear in Settings. If a preset does not include enough information to identify its type, you choose the destination.
-
-FPC kits use `Presets/Plugin presets/Generators/FPC` inside User Data Folder. The preset and its accompanying samples are copied together into the kit folder.
-
-Morphine presets in either `.fst` or native `.mrp` format use the same destination: `Presets/Plugin presets/Generators/Morphine` inside User Data Folder.
-
-Sampler channel-state `.fst` files with an empty internal plugin identity use `Presets/Channel presets` inside User Data Folder.
-
-Channel envelope `.chenv` files use `Presets/Channel envelopes` inside User Data Folder.
-
-Mixer-track `.fst` presets are recognized by their mixer-state header and copied to `Presets/Mixer presets` inside User Data Folder, including folder and ZIP imports.
-
-Sawer presets in `.fst` or `.sawer` format use `Presets/Plugin presets/Generators/Sawer` inside User Data Folder.
-
-Toxic Biohazard presets in `.fst`, `.txd`, or `.tbio` format use `Presets/Plugin presets/Generators/Toxic Biohazard` inside User Data Folder.
-
-FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder’s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin identity and category; its Plugin Manager `.nfo` name (or database FST filename) supplies the destination name, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. Verified native-plugin IDs, such as PoiZone’s `SawW`, can also match their installed native FST, which has no VST ID. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
-
-The supplied Albino CracklePad FXP uses ID `H4M9` and an omitted outer size. FL Dropper checks its exact inner chunk length and, if no direct match exists, looks up installed Albino ID `g7U0`. A matching installed FST is still required; this alias comes from the user-identified sample and local Albino metadata.
-
-H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the identity and category, and the Plugin Manager name supplies the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he’s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
-
-
-FST headers distinguish **channel states** from **plugin presets**. **3x Osc channel states** are an exception to the User Data preference: they go to `Data/Patches/Channel presets/3x Osc` inside FL Studio Install Folder. The detected channel-state type appears in the highlighted filename and import details. Installation-folder permissions may prevent copying; the app reports the failing path.
-
-When a new plugin is recognized, FL Dropper looks for its folder in User Data first. A single matching user-data folder is remembered automatically. Otherwise, the location dialog defaults to a User Data folder, offering to create it even if a matching installation folder already exists. You can explicitly choose an installation folder or browse elsewhere. New destinations in Settings also default to User Data.
+For scores and MIDI files, choose an existing Scores subfolder or create one when prompted.
 
 The highlighted text shows the last dropped filename and plugin. The status line reports the results; click its caret to see individual file details. Use the **folder icon** to open the destination.
-
-### Folders and ZIP files
-
-- In **Auto Detect**, `.fst` presets are grouped by plugin, including presets in subfolders. Companion files such as samples and images are copied with each plugin group, keeping their relative paths.
-- Each destination receives a folder named after the dropped folder or ZIP archive. If a ZIP already has one enclosing folder containing everything, that folder is reused without adding a second ZIP-name folder.
-- To keep a package together in one place, select a destination before dropping it. For a general mixed package, use a custom destination that accepts any file.
-- ZIP archives containing an FL Studio project offer **Keep ZIP as file**. Nested ZIP archives are not unpacked automatically.
-
-### Scripts and helper files
-
-Auto Detect reads script imports without running them:
-
-| Script type | Recognized by | Destination inside User Data Folder |
-| --- | --- | --- |
-| [Piano Roll](https://il-group.github.io/FL-Studio-API-Stubs/piano_roll_scripting/) | A `.pyscript` importing `flpianoroll`, directly or through a supplied helper | `Settings/Piano roll scripts` |
-| [Edison / Slicex](https://il-group.github.io/FL-Studio-API-Stubs/edison_scripting/) | A `.pyscript` importing `enveditor`, directly or through a supplied helper | `Settings/Audio scripts` |
-| [MIDI hardware](https://il-group.github.io/FL-Studio-API-Stubs/midi_controller_scripting/script_files/) | A `device_*.py` entry point | `Settings/Hardware/<script folder>` |
-
-Drop the complete script folder or ZIP to include its `.py` helpers and resources. Script packages stay together, preserving internal paths. If you drop loose script files together from the same folder, only those selected files are grouped and copied; other files beside them are not included automatically.
-
-Unidentified scripts, helpers without an entry point, and packages containing different script types require a destination choice. Import separate script folders individually when they need different destinations. Review dependency notes in the import summary or expandable details; external and dynamic imports cannot be fully verified.
-
-Hardware entry points must be directly inside their controller folder. ZIPs with a single enclosing controller folder are handled automatically. For deeper nesting or multiple controller folders, extract the ZIP and drop each folder containing `device_*.py`. FL Dropper flags these deeper layouts rather than automatically installing them at the wrong depth.
-
-### Scores and MIDI
-
-`.fsc`, `.mid`, and `.midi` files use **Scores**, which defaults to `Presets/Scores` inside your FL Studio User Data Folder. If Scores has subfolders, an import asks which folder to use. Choose the Scores root, an existing subfolder, or enter a new subfolder name to create it. The choice applies to all scores in that import. With no existing subfolders, scores copy directly into Scores. Folder and ZIP imports preserve their package structure inside the chosen location.
 
 ### Duplicate filenames
 
@@ -118,11 +85,11 @@ Use **Settings** to rename, edit, disable, or delete destinations and change the
 
 ## Update
 
-Close FL Dropper, update or replace the downloaded app files, and run **setup.bat** again. Then open **run.bat**. Keep your `config.json` when updating to preserve settings.
+Close FL Dropper and update or replace the downloaded app files, keeping your `config.json` to preserve settings. On Windows, rerun **setup.bat**, then launch with the desktop shortcut or **run.bat**. On macOS, rerun `bash setup.command`, then open **FL Dropper.app**.
 
 ## Your settings
 
-Folders, custom destinations, and preferences are saved in **config.json in the app folder**, beside `run.bat` and `setup.command`. Each copy of FL Dropper has its own settings. A new directory starts with the bundled known destinations and preferences, including previously learned plugin locations. Install, Shared User Data, and User Data root paths start blank and are detected on that computer. Existing configuration files keep their own settings.
+Folders, destinations, and preferences are saved in **config.json in the app folder**. Each copy of FL Dropper has its own settings.
 
 To reset a copy, close the app and rename its `config.json` as a backup. To move your settings to another copy, copy that file. **Settings → Open configuration** opens the configuration file after it has been saved. Keep the app in a writable folder.
 
@@ -137,34 +104,4 @@ Settings from older versions stored under your user profile are not imported aut
 - **Access denied:** check the destination shown in the error. Choose a writable user-data location where appropriate; FL Studio's program folder may be protected.
 - **A ZIP cannot be imported:** check that it opens normally and is not encrypted. Unsafe or oversized archives may be rejected.
 
-## macOS (experimental)
-
-macOS launchers are included, but the app has not been verified on macOS. Automatic folder discovery and installation-folder validation currently support Windows only. Use manually selected user-data folders or absolute destinations.
-
-Open Terminal in the extracted app folder and run:
-
-```bash
-bash setup.command
-```
-
-Setup calls **get-python.command** if Python is missing. It asks before installing Python 3.12 through an existing Homebrew installation. Without Homebrew, it offers to open the official Python download page; finish that installer, then rerun setup. The official installer may require an administrator password. Homebrew itself is not installed automatically. You can also run `bash get-python.command` separately. [Python macOS installation](https://docs.python.org/3.12/using/mac.html), [Homebrew Python](https://formulae.brew.sh/formula/python@3.12).
-
-Setup reuses a healthy `.venv` and automatically removes and rebuilds an unusable one. It preserves `config.json` and refuses to clean a `.venv` that is itself a symlink. Close FL Dropper before rerunning setup.
-
-After setup, double-click **FL Dropper.app** to open the app without a Terminal window. Keep it inside the downloaded folder beside `setup.command`; it uses the Python environment created there. To put a shortcut elsewhere, create a Finder alias rather than moving the app launcher.
-
-For troubleshooting, **run.command** still opens the app with Terminal messages:
-
-```bash
-bash run.command
-```
-
-Rerun `bash setup.command` after updating the app.
-
-Plugin metadata decoding uses [PyFLP](https://github.com/demberto/PyFLP). Setup installs it automatically.
-
-### Checking macOS setup without a Mac
-
-A manually triggered **macOS test** workflow is included in `.github/workflows/macos-test.yaml`. After pushing the repository to GitHub, open **Actions → macOS test → Run workflow**. It uses a real GitHub-hosted macOS runner to install dependencies, rebuild a broken environment, verify reuse and config preservation, and create a Qt window offscreen. No FL Studio installation is required. [GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners).
-
-The workflow has not been run from this Windows development machine. It tests setup using preinstalled Python, not Homebrew installation on a clean Mac or the interactive Python installer. Finder launching, macOS permission dialogs, FL Studio paths, and actual imports still need a Mac user to verify. Windows shell simulations cannot establish macOS compatibility.
+Implementation details and development checks are in [devnotes.md](devnotes.md).
