@@ -2,3 +2,4 @@
 *.command text eol=lf
 FLDropper text eol=lf
 *.plist text eol=lf
+*.sh text eol=lf

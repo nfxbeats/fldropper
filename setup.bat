@@ -2,44 +2,41 @@
 setlocal
 pushd "%~dp0" || exit /b 1
 set "FLDROPPER_EXIT=1"
+set "FLDROPPER_PYTHON_FLAG="
 
 echo Setting up FL Dropper...
-if exist ".venv\Scripts\python.exe" goto install
-if exist ".venv" (
-    echo The .venv folder exists but has no Windows Python interpreter.
-    echo Rename it and run setup.bat again to create a Windows environment.
-    goto finish 
-)
+call :check_venv
+if not errorlevel 1 goto install
 
+call "%~dp0get-python.bat" --no-pause --from-setup
+if errorlevel 1 goto finish
 py -3 -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
-if not errorlevel 1 goto create_py
+if not errorlevel 1 (
+    set "FLDROPPER_PYTHON=py"
+    set "FLDROPPER_PYTHON_FLAG=-3"
+    goto rebuild
+)
 python -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
-if not errorlevel 1 goto create_python
-echo Python 3.12 or newer is required. Install it from https://www.python.org/downloads/
-echo Then run setup.bat again.
-goto finish
+if not errorlevel 1 (
+    set "FLDROPPER_PYTHON=python"
+    goto rebuild
+)
+if not defined LOCALAPPDATA goto python_missing
+if not exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" goto python_missing
+set "FLDROPPER_PYTHON=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+"%FLDROPPER_PYTHON%" -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
+if errorlevel 1 goto python_missing
 
-:create_py
-py -3 -m venv ".venv"
+:rebuild
+rem The helper validates this exact project's .venv before removing anything.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\clean-venv.ps1" -ProjectRoot "%CD%"
+if errorlevel 1 goto finish
+"%FLDROPPER_PYTHON%" %FLDROPPER_PYTHON_FLAG% -m venv ".venv"
 if errorlevel 1 goto venv_failed
-goto install
-
-:create_python
-python -m venv ".venv"
+call :check_venv
 if errorlevel 1 goto venv_failed
-goto install
-
-:venv_failed
-echo Could not create .venv. Check the Python installation and folder permissions.
-goto finish
 
 :install
-".venv\Scripts\python.exe" -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
-if errorlevel 1 (
-    echo The existing .venv is unavailable or uses Python older than 3.12.
-    echo Rename .venv and run setup.bat again.
-    goto finish
-)
 ".venv\Scripts\python.exe" -m pip install .
 if errorlevel 1 (
     echo Installation failed. Check the error above and your internet connection, then rerun setup.bat.
@@ -52,8 +49,22 @@ if errorlevel 1 (
 echo.
 echo Setup complete. Double-click run.bat to open FL Dropper.
 set "FLDROPPER_EXIT=0"
+goto finish
+
+:python_missing
+echo Compatible Python could not be found. Close this window and rerun setup.bat.
+goto finish
+
+:venv_failed
+echo Could not create a usable .venv. Close FL Dropper and check folder permissions, then rerun setup.bat.
+goto finish
 
 :finish
 popd
 if /i not "%~1"=="--no-pause" pause
 exit /b %FLDROPPER_EXIT%
+
+:check_venv
+if not exist ".venv\Scripts\python.exe" exit /b 1
+".venv\Scripts\python.exe" -c "import sys, pathlib, pip; expected = pathlib.Path('.venv').resolve(); raise SystemExit(sys.version_info < (3, 12) or sys.prefix == sys.base_prefix or pathlib.Path(sys.prefix).resolve() != expected)" >nul 2>&1
+exit /b %errorlevel%

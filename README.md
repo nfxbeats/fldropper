@@ -6,10 +6,14 @@ Drop FL Studio presets, samples, scripts, projects, folders, or ZIP files into o
 
 ## Install on Windows
 
-1. Install **Python 3.12 or newer** from [python.org](https://www.python.org/downloads/). If the installer offers **Add Python to PATH**, enable it.
+1. Python 3.12 or newer is required. If missing, **setup.bat** calls **get-python.bat**, which asks before attempting installation through WinGet. If WinGet is unavailable, install Python from [python.org](https://www.python.org/downloads/) and enable **Add Python to PATH** if offered.
 2. Download this repository and extract the ZIP, or clone it. Keep the entire folder together in a location you can write to, such as your Documents folder.
 3. Double-click **setup.bat**. An internet connection is needed to download the app's dependencies. Wait for **Setup complete**.
 4. Double-click the **FL Dropper** desktop shortcut, or **run.bat**, to open FL Dropper.
+
+Optional: double-click **get-python.bat** to check for Python first. If Python 3.12 or newer is missing, it asks before attempting a per-user Python 3.12 installation through WinGet. If WinGet is unavailable or installation fails, it provides the manual download link. It does not run FL Dropper setup; afterward, run **setup.bat** yourself. Existing compatible Python installations are kept. WinGet may display license prompts. ([WinGet installation options](https://learn.microsoft.com/en-us/windows/package-manager/winget/install))
+
+Setup reuses a working `.venv`. If it is broken, missing pip, or uses an incompatible Python, setup removes that app folder’s `.venv` and rebuilds it. Close FL Dropper before rerunning setup. Settings and other app files are preserved. Links or junctions inside `.venv` require manual removal.
 
 After setup, use **run.bat** whenever you want to open the app. You do not need to activate Python or enter commands.
 
@@ -60,11 +64,11 @@ Sawer presets in `.fst` or `.sawer` format use `Presets/Plugin presets/Generator
 
 Toxic Biohazard presets in `.fst`, `.txd`, or `.tbio` format use `Presets/Plugin presets/Generators/Toxic Biohazard` inside User Data Folder.
 
-FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder�s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin identity and category; its Plugin Manager `.nfo` name (or database FST filename) supplies the destination name, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. Verified native-plugin IDs, such as PoiZone�s `SawW`, can also match their installed native FST, which has no VST ID. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
+FXP imports look up the embedded VST2 plugin ID in the FST files under your configured User Data folder’s `Presets/Plugin database/Installed/Generators` and `Effects`. The matching FST supplies the plugin identity and category; its Plugin Manager `.nfo` name (or database FST filename) supplies the destination name, using the normal `Fruity Wrapper - <plugin name>` destination. No plugin is loaded or executed. Missing or conflicting matches fail with a message; scan the plugin in FL Studio Plugin Manager before retrying. Verified native-plugin IDs, such as PoiZone’s `SawW`, can also match their installed native FST, which has no VST ID. This applies to loose FXPs and FXPs inside folders or ZIPs. If a package contains an unmatched FXP, that package fails inspection before copying.
 
 The supplied Albino CracklePad FXP uses ID `H4M9` and an omitted outer size. FL Dropper checks its exact inner chunk length and, if no direct match exists, looks up installed Albino ID `g7U0`. A matching installed FST is still required; this alias comes from the user-identified sample and local Albino metadata.
 
-H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the identity and category, and the Plugin Manager name supplies the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he�s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
+H2P presets are identified by their embedded `#AM` product name and matched to an installed-plugin FST, including VST3 entries. The FST supplies the identity and category, and the Plugin Manager name supplies the normal `Fruity Wrapper - <plugin name>` destination. Missing or conflicting matches stop the import with a message. Loose files, folders, and ZIPs are supported; source files remain unchanged. H2P is shared by multiple u-he plugins, so the extension alone does not imply Diva. See [u-he’s Diva user guide](https://u-he.com/downloads/manuals/plugins/diva/Diva-user-guide.pdf).
 
 
 FST headers distinguish **channel states** from **plugin presets**. **3x Osc channel states** are an exception to the User Data preference: they go to `Data/Patches/Channel presets/3x Osc` inside FL Studio Install Folder. The detected channel-state type appears in the highlighted filename and import details. Installation-folder permissions may prevent copying; the app reports the failing path.
@@ -137,11 +141,15 @@ Settings from older versions stored under your user profile are not imported aut
 
 macOS launchers are included, but the app has not been verified on macOS. Automatic folder discovery and installation-folder validation currently support Windows only. Use manually selected user-data folders or absolute destinations.
 
-Install Python 3.12 or newer, open Terminal in the extracted app folder, and run:
+Open Terminal in the extracted app folder and run:
 
 ```bash
 bash setup.command
 ```
+
+Setup calls **get-python.command** if Python is missing. It asks before installing Python 3.12 through an existing Homebrew installation. Without Homebrew, it offers to open the official Python download page; finish that installer, then rerun setup. The official installer may require an administrator password. Homebrew itself is not installed automatically. You can also run `bash get-python.command` separately. [Python macOS installation](https://docs.python.org/3.12/using/mac.html), [Homebrew Python](https://formulae.brew.sh/formula/python@3.12).
+
+Setup reuses a healthy `.venv` and automatically removes and rebuilds an unusable one. It preserves `config.json` and refuses to clean a `.venv` that is itself a symlink. Close FL Dropper before rerunning setup.
 
 After setup, double-click **FL Dropper.app** to open the app without a Terminal window. Keep it inside the downloaded folder beside `setup.command`; it uses the Python environment created there. To put a shortcut elsewhere, create a Finder alias rather than moving the app launcher.
 
@@ -154,3 +162,9 @@ bash run.command
 Rerun `bash setup.command` after updating the app.
 
 Plugin metadata decoding uses [PyFLP](https://github.com/demberto/PyFLP). Setup installs it automatically.
+
+### Checking macOS setup without a Mac
+
+A manually triggered **macOS install check** workflow is included in `.github/workflows/macos-install.yml`. After pushing the repository to GitHub, open **Actions → macOS install check → Run workflow**. It uses a real GitHub-hosted macOS runner to install dependencies, rebuild a broken environment, verify reuse and config preservation, and create a Qt window offscreen. No FL Studio installation is required. [GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners).
+
+The workflow has not been run from this Windows development machine. It tests setup using preinstalled Python, not Homebrew installation on a clean Mac or the interactive Python installer. Finder launching, macOS permission dialogs, FL Studio paths, and actual imports still need a Mac user to verify. Windows shell simulations cannot establish macOS compatibility.

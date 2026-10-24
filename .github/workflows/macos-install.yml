@@ -1,0 +1,64 @@
+name: macOS install check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check shell syntax and existing Python
+        run: |
+          for script in setup.command get-python.command run.command scripts/macos-common.sh "FL Dropper.app/Contents/MacOS/FLDropper"; do
+            /bin/bash -n "$script"
+          done
+          /bin/bash get-python.command --check-only
+      - name: Refuse cleanup through a top-level symlink
+        run: |
+          mkdir "$RUNNER_TEMP/fldropper-outside"
+          printf 'preserve target' > "$RUNNER_TEMP/fldropper-outside/marker"
+          ln -s "$RUNNER_TEMP/fldropper-outside" .venv
+          if /bin/bash setup.command --no-pause; then
+            echo 'Setup should refuse a symlinked environment'
+            exit 1
+          fi
+          test -f "$RUNNER_TEMP/fldropper-outside/marker"
+          unlink .venv
+      - name: Create a broken environment and preserve settings
+        run: |
+          mkdir .venv
+          printf 'broken environment' > .venv/broken-marker
+          ln -s "$RUNNER_TEMP/fldropper-outside" .venv/interior-link
+          printf '{"test": "preserve"}\n' > config.json
+          cp config.json "$RUNNER_TEMP/config-before.json"
+      - name: Rebuild and install dependencies
+        run: |
+          /bin/bash setup.command --no-pause
+          test ! -e .venv/broken-marker
+          test -f "$RUNNER_TEMP/fldropper-outside/marker"
+          cmp config.json "$RUNNER_TEMP/config-before.json"
+          .venv/bin/python -c 'import sys, pip, PySide6, pyflp, fldropper; assert sys.version_info >= (3, 12)'
+      - name: Reuse a healthy environment
+        run: |
+          printf 'keep healthy environment' > .venv/reuse-marker
+          /bin/bash setup.command --no-pause
+          test -f .venv/reuse-marker
+          cmp config.json "$RUNNER_TEMP/config-before.json"
+      - name: Check Qt can create a window
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .venv/bin/python - <<'PY'
+          from PySide6.QtWidgets import QApplication, QWidget
+          app = QApplication([])
+          window = QWidget()
+          window.show()
+          app.processEvents()
+          window.close()
+          print("Qt window smoke check passed")
+          PY
