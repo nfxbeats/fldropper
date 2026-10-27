@@ -196,14 +196,15 @@ def registry_candidates(registry=None, *, kind: str = "user_data") -> list[Candi
 
 
 def validate_root(path: Path, kind: str) -> None:
+    """Validate a configured folder, without requiring FL Studio executables.
+
+    Manual roots are intentional copy locations on either platform. Discovery
+    provides suggestions; destination containment is checked by transfers.
+    """
     if not path.is_dir():
         raise ValueError(f"Folder does not exist: {path}")
     if not os.access(path, os.R_OK | os.X_OK):
         raise ValueError(f"Cannot read folder: {path}")
-    if kind == "fl_install" and not (
-        (path / "FL64.exe").is_file() and (path / "Plugins").is_dir()
-    ):
-        raise ValueError(f"Not a verified FL Studio installation (needs FL64.exe and Plugins): {path}")
 
 
 def documents_folder() -> Path | None:
