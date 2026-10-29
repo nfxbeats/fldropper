@@ -108,6 +108,19 @@ Implementation details and development checks are in [devnotes.md](devnotes.md).
 
 ## Standalone builds with GitHub Actions
 
+The current version is defined by `__version__` in `fldropper/__init__.py`.
+It also supplies the Python package version, window title, and build filenames.
+For example, Windows beta builds use `FLDropper-0.9.0b1-Windows-AMD64.zip`;
+the GitHub Actions artifact has the same name without `.zip`.
+
+To release an update, change that one version value and commit it. Use
+`0.9.0b2` for the next beta, `0.9.0` for the stable release, and versions such
+as `0.9.1` for subsequent fixes. Push a matching tag (for example,
+`git tag v0.9.0b2` followed by `git push origin v0.9.0b2`) to trigger builds,
+or run the workflow manually. Filenames always use the committed version.
+The older `v0.9.0.beta` tag is left unchanged; `0.9.0b1` uses Python's standard
+beta version spelling. Configuration schema versions are independent.
+
 After pushing the repository, open **Actions → Build desktop apps → Run workflow**.
 The workflow builds Windows x64, macOS Apple Silicon, and macOS Intel apps with
 PyInstaller. Download your platform's artifact from the completed run and extract

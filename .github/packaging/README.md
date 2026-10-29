@@ -4,6 +4,13 @@ Push these tracked helpers and `.github/workflows/pyinstaller-build.yaml` to
 GitHub. Open **Actions → Build desktop apps → Run workflow**. Pushing a `v*` tag
 also starts a build. No release is published automatically.
 
+Update `fldropper/__init__.py`'s `__version__` before committing a release,
+then use a matching `v<version>` tag. Both the uploaded artifact and its
+distribution ZIP include this version, platform, and architecture. Manual
+builds use the same version source. For example:
+`FLDropper-0.9.0b1-Windows-AMD64.zip`. App bundle and executable names stay
+stable so shortcuts and launchers continue to work.
+
 The workflow builds Windows x64, Mac Apple Silicon, and Mac Intel separately,
 using Python 3.12. Each job checks the actual bundled app offscreen before
 uploading a ZIP. Download the matching artifact from the completed run, then

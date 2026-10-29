@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QToolButton, QVBoxLayout, QWidget,
 )
 
+from . import __version__
 from .config import Config, ConfigError, Destination, default_config, default_config_path, load, parse, resolve, save
 from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
@@ -783,7 +784,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config_path: Path | None = None):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setWindowTitle("FL Dropper - Produced by NFX @ Warbeats")
+        self.setWindowTitle(f"FL Dropper {__version__} - Produced by NFX @ Warbeats")
         self.setWindowIcon(QIcon(str(WINDOW_ICON)))
         self.native_icons = WindowsIcons()
         self.destroyed.connect(self.native_icons.release)
@@ -1452,6 +1453,7 @@ def create_application():
         app.destroyed.connect(gc.enable)
     app.setWindowIcon(QIcon(str(APP_IMAGE)))
     app.setApplicationName("FLDropper")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("FLDropper")
     app.setStyle("Fusion")
     palette = QPalette()

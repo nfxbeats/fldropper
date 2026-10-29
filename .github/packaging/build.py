@@ -2,6 +2,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,12 @@ import sys
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 OUTPUT = HERE / "dist"
+
+
+def archive_label():
+    # Read the checkout, independent of any previously installed package.
+    version = runpy.run_path(str(ROOT / "fldropper" / "__init__.py"))["__version__"]
+    return f"FLDropper-{version}-{'Windows' if sys.platform == 'win32' else 'macOS'}-{platform.machine()}"
 
 
 def main():
@@ -36,7 +43,7 @@ def main():
     subprocess.run([str(executable), "--packaging-smoke-test"],
                    env=dict(env, QT_QPA_PLATFORM="offscreen"), cwd=OUTPUT,
                    check=True, timeout=60)
-    label = f"FLDropper-{'Windows' if windows else 'macOS'}-{platform.machine()}"
+    label = archive_label()
     archive = OUTPUT / f"{label}.zip"
     if windows:
         shutil.make_archive(str(OUTPUT / label), "zip", OUTPUT, "FL Dropper")
@@ -45,6 +52,10 @@ def main():
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
                         str(OUTPUT / "FL Dropper.app"), str(archive)], check=True)
     print(f"Distributable: {archive}")
+    if output := os.environ.get("GITHUB_OUTPUT"):
+        with open(output, "a", encoding="utf-8") as stream:
+            stream.write(f"artifact_name={label}\n")
+            stream.write(f"archive_path={archive.as_posix()}\n")
 
 
 if __name__ == "__main__":

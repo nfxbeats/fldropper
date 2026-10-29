@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fldropper"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Copy FL Studio content into configured destinations"
 requires-python = ">=3.12"
 dependencies = ["PySide6>=6.8,<7", "PyFLP==2.2.1"]
@@ -17,6 +17,9 @@ fldropper = "fldropper.ui:main"
 
 [tool.setuptools.packages.find]
 include = ["fldropper*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "fldropper.__version__"}
 
 [tool.setuptools.package-data]
 fldropper = ["assets/*.ico", "assets/*.png", "defaults.json"]
