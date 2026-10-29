@@ -1,3 +1,3 @@
 """FL Dropper: copy-only FL Studio content imports."""
 
-__version__ = "0.9.0b1"
+__version__ = "0.9.0b2"
