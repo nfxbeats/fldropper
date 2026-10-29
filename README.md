@@ -105,3 +105,13 @@ Settings from older versions stored under your user profile are not imported aut
 - **A ZIP cannot be imported:** check that it opens normally and is not encrypted. Unsafe or oversized archives may be rejected.
 
 Implementation details and development checks are in [devnotes.md](devnotes.md).
+
+## Standalone builds with GitHub Actions
+
+After pushing the repository, open **Actions → Build desktop apps → Run workflow**.
+The workflow builds Windows x64, macOS Apple Silicon, and macOS Intel apps with
+PyInstaller. Download your platform's artifact from the completed run and extract
+the distribution ZIP inside it. Keep the entire Windows app folder (including
+`_internal`) or the complete Mac `.app` bundle together. Python is not required
+to run these builds. Builds are unsigned and Mac interactive behavior still
+needs verification. See [build details](.github/packaging/README.md).
