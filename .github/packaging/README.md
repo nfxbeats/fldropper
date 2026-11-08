@@ -1,5 +1,12 @@
 # GitHub desktop builds
 
+For a local Windows build, double-click `build.bat` in the repository root,
+or run `.\build.bat --no-pause` from PowerShell. It uses the project `.venv`
+(creating one if needed with Python 3.12+), installs the same build dependencies
+as CI, builds the app, checks bundled startup, and creates a ZIP under
+`.github/packaging/dist`. The ZIP name always reads the current version from
+`fldropper/__init__.py`; there is no version to edit in the BAT file.
+
 Push these tracked helpers and `.github/workflows/pyinstaller-build.yaml` to
 GitHub. Open **Actions → Build desktop apps → Run workflow**. Pushing a `v*` tag
 also starts a build. No release is published automatically.

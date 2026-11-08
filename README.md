@@ -128,6 +128,11 @@ Implementation details and development checks are in [devnotes.md](devnotes.md).
 
 ## Standalone builds with GitHub Actions
 
+To build locally on Windows, double-click **build.bat**, or run
+`.\build.bat --no-pause` in PowerShell. It installs build dependencies in the
+project `.venv`, builds and checks the app, and writes the versioned ZIP to
+`.github/packaging/dist`. Python 3.12 or newer is required to build.
+
 The current version is defined by `__version__` in `fldropper/__init__.py`.
 It also supplies the Python package version, window title, and build filenames.
 The source macOS launcher's `FL Dropper.app/Contents/Info.plist` records the
