@@ -18,6 +18,7 @@ htmlcov/
 # Local development, research, and sample content (not needed to run the app)
 /tests/*
 !/tests/test_vst3.py
+!/tests/test_build_trigger.py
 /reports/
 /tools/
 /sample-fst/

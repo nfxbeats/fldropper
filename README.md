@@ -133,11 +133,15 @@ Implementation details and development checks are in [devnotes.md](devnotes.md).
 To start the GitHub Actions build from Windows, install [GitHub CLI](https://cli.github.com),
 run `gh auth login`, then double-click **build.bat** or run
 `.\build.bat --no-pause` in PowerShell. Commit and push your changes first.
-The BAT file verifies a clean checkout and matching local/remote commits, then
-starts **Build desktop apps** on the current branch in the `origin` repository.
+The BAT file verifies a clean checkout and matching local/remote commits, reads
+`__version__`, then creates and pushes its version tag (such as `v0.9.0b4`) to
+trigger **Build desktop apps**. Runs appear under that version tag, not `main`.
+If the tag already points to the same commit on GitHub, it dispatches a build
+on that tag. A tag used for different code requires a version increment.
 Windows and macOS ZIPs appear in the workflow's artifacts, named using the
 version in the pushed commit. It does not publish a GitHub Release.
-Use `.\build.bat --check` to verify prerequisites without starting a build.
+Use `.\build.bat --check` to verify prerequisites without creating/pushing tags
+or starting a build. Existing release tags are never moved.
 
 The current version is defined by `__version__` in `fldropper/__init__.py`.
 It also supplies the Python package version, window title, and build filenames.

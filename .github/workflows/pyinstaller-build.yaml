@@ -1,4 +1,5 @@
 name: Build desktop apps
+run-name: Build ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
