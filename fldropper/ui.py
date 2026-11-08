@@ -21,7 +21,7 @@ from . import __version__
 from .config import Config, ConfigError, Destination, default_config, default_config_path, load, parse, resolve, save
 from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
-from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts, needs_plugin_name
+from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts, needs_plugin_name, is_vst3_package
 from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative, scan, validate_target, is_link
 from .vst3 import add_missing_destinations, verified_destinations
 
@@ -270,7 +270,8 @@ class Settings(QDialog):
                 path = str(resolve(self.config, d)[1])
             except ValueError:
                 path = "Setup required"
-            for col, text in enumerate([d.name + (" (disabled)" if not d.enabled else ""),
+            for col, text in enumerate([d.name + (" (disabled)" if not d.enabled else "") +
+                                       (" (VST3 default)" if self.config.extra.get("preferred_vst3_destination") == d.id else ""),
                                          ", ".join(d.extensions) or "Any file · manual only", path]):
                 self.table.setItem(row, col, QTableWidgetItem(text))
 
@@ -284,7 +285,7 @@ class Settings(QDialog):
             return
         self.detect_button.setEnabled(False)
         self.detection_status.setText("Detecting folders…")
-        self.discovery_worker = Worker(lambda _: self.find_candidates(), self)
+        self.discovery_worker = Worker(lambda _: (self.find_candidates(), verified_destinations()), self)
         self.discovery_worker.done.connect(lambda value: setattr(self.discovery_worker, "result", value))
         self.discovery_worker.finished.connect(self.discovery_finished)
         self.discovery_worker.start()
@@ -302,14 +303,17 @@ class Settings(QDialog):
                        for c in installation_suggestions()]
 
     def discovery_finished(self):
-        candidates = self.discovery_worker.result
+        result = self.discovery_worker.result
         self.discovery_worker.deleteLater()
         self.discovery_worker = None
         self.detect_button.setEnabled(True)
-        if isinstance(candidates, Exception):
+        if isinstance(result, Exception):
             self.detection_status.setText("Detection failed. Browse to the folders manually.")
-            QMessageBox.warning(self, "Folder detection", str(candidates))
+            QMessageBox.warning(self, "Folder detection", str(result))
             return
+        candidates, verified = result
+        added = add_missing_destinations(self.config, verified)
+        self.refresh()
         ambiguous = {}
         labels = {"user_data": "User Data Folder", "shared_data": "Shared User Data Folder", "fl_install": "FL Studio Install Folder"}
         filled, missing = [], []
@@ -334,6 +338,9 @@ class Settings(QDialog):
         if ambiguous:
             self.choose_detected_folders(ambiguous, labels, filled)
         text = "Populated " + ", ".join(filled) + ". Click Save to apply." if filled else "Existing folder values preserved."
+        if verified:
+            text += (" Added " + ", ".join(added) + "." if added else " VST3 locations checked.")
+            text += " Click Save to keep detected locations and the VST3 default."
         if missing:
             text += " No valid candidate for " + ", ".join(missing) + "; browse manually."
         if any(not self.roots[kind].text().strip() for kind in ambiguous):
@@ -721,7 +728,7 @@ class RoutingDialog(QDialog):
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = package_choices(config, pkg) if pkg.source.suffix.casefold() == ".vst3" or pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
+                suggested = package_choices(config, pkg) if is_vst3_package(pkg) or pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:
@@ -758,9 +765,11 @@ class RoutingDialog(QDialog):
         layout.addWidget(buttons)
         self.resize(1000, 370)
         self.jobs = []
+        self.vst3_destinations = set()
 
     def accept(self):
         jobs = []
+        vst3_destinations = set()
         try:
             for p, choice, mode in zip(self.packages, self.choices, self.modes):
                 if not choice.currentData():
@@ -775,7 +784,10 @@ class RoutingDialog(QDialog):
                     target /= p.destination_subfolder
                 validate_target(root, target)
                 jobs.append(Job(p, root, target, bool(keep)))
+                if is_vst3_package(p) and not keep and d.automatic and ".vst3" in d.extensions:
+                    vst3_destinations.add(d.id)
             self.jobs = jobs
+            self.vst3_destinations = vst3_destinations
             super().accept()
         except ValueError as exc:
             QMessageBox.warning(self, "Destination needs setup", str(exc))
@@ -1221,6 +1233,8 @@ class MainWindow(QMainWindow):
             label = "Score/MIDI file" if self.last_dropped_path.suffix.casefold() in (".fsc", ".mid", ".midi") else plugin or "Plugin not identified"
             if self.last_dropped_path.suffix.casefold() == ".chenv":
                 label = "Channel envelope"
+            elif self.last_dropped_path.suffix.casefold() == ".vst3":
+                label = "VST3 plugin"
             self.last_drop_label.setText(f"{label}: {self.last_dropped_path.name}")
             self.last_drop_label.setToolTip(self.last_drop_label.text())
         if isinstance(result, Exception):
@@ -1280,6 +1294,7 @@ class MainWindow(QMainWindow):
             self.status.setText(errors[0] if errors else f"No imports ready. {self.pending_skipped} skipped.")
             return
         jobs = []
+        vst3_destinations = set()
         review = False
         try:
             for p in packages:
@@ -1301,6 +1316,8 @@ class MainWindow(QMainWindow):
                 validate_root(root, choices[0].root)
                 validate_target(root, target)
                 jobs.append(Job(p, root, target))
+                if is_vst3_package(p) and choices[0].automatic and ".vst3" in choices[0].extensions:
+                    vst3_destinations.add(choices[0].id)
         except ValueError as exc:
             QMessageBox.warning(self, "Setup required", str(exc))
             self.status.setText("Import stopped; configure a valid destination in Settings.")
@@ -1309,6 +1326,7 @@ class MainWindow(QMainWindow):
             dialog = RoutingDialog(self.config, packages, selection, self)
             accepted = dialog.exec()
             jobs = dialog.jobs
+            vst3_destinations = dialog.vst3_destinations
             dialog.deleteLater()
             if not accepted:
                 self.status.setText("Import cancelled before copying.")
@@ -1323,6 +1341,19 @@ class MainWindow(QMainWindow):
         if not self.choose_score_subfolder(jobs, selection):
             self.status.setText("Import cancelled before copying.")
             return
+        if len(vst3_destinations) == 1:
+            trial = copy.deepcopy(self.config)
+            trial.extra["preferred_vst3_destination"] = next(iter(vst3_destinations))
+            if trial.to_dict() != self.config.to_dict():
+                try:
+                    if self.config_path.exists():
+                        load(self.config_path)
+                    save(trial, self.config_path)
+                    self.config = trial
+                except (ConfigError, OSError) as exc:
+                    QMessageBox.warning(self, "VST3 location was not saved", str(exc))
+                    self.status.setText("Import stopped; the VST3 destination could not be saved.")
+                    return
         self.last_target = jobs[0].target
         if jobs[0].package.zip_root_folder and not jobs[0].keep_zip:
             self.last_target /= jobs[0].package.zip_root_folder

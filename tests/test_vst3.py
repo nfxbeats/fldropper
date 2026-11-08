@@ -12,7 +12,7 @@ import pytest
 from fldropper import vst3
 from fldropper.catalog import CATALOG_REVISION
 from fldropper.config import Config, Destination, load, save
-from fldropper.routing import fst_package_groups, package_matches
+from fldropper.routing import compatible, fst_package_groups, package_choices, package_matches
 from fldropper.transfers import Job, run_jobs, scan
 
 
@@ -165,10 +165,116 @@ def test_startup_updates_saved_config_and_routing_dialog(app, monkeypatch, tmp_p
     assert dialog.choices[0].currentData() == "vst3-test"
     window.config.destinations.append(Destination("second", "Other VST3", [".vst3"], path=str(tmp_path)))
     ambiguous = ui.RoutingDialog(window.config, [package], "auto")
-    assert ambiguous.choices[0].currentData() is None
+    assert ambiguous.choices[0].currentData() == "vst3-test"
     dialog.close()
     ambiguous.close()
     window.close()
+    app.processEvents()
+
+
+def wait_idle(window):
+    from PySide6.QtTest import QTest
+    deadline = time.monotonic() + 10
+    while window.worker is not None and time.monotonic() < deadline:
+        QTest.qWait(10)
+        time.sleep(.001)
+    assert window.worker is None
+
+
+def test_default_uses_documented_priority_and_respects_saved_choice(monkeypatch, tmp_path):
+    monkeypatch.setattr(vst3.sys, "platform", "win32")
+    choices = []
+    for key in ("vst3-windows-x86", "vst3-windows-global", "vst3-windows-user"):
+        path = tmp_path / key
+        path.mkdir()
+        choices.append(Destination(key, key, [".vst3"], path=str(path)))
+    config = Config(destinations=choices)
+    vst3.add_missing_destinations(config, choices)
+    assert config.extra["preferred_vst3_destination"] == "vst3-windows-user"
+    assert compatible(config, Path("Plugin.vst3"), True) == [choices[2]]
+    config.extra["preferred_vst3_destination"] = "vst3-windows-global"
+    assert compatible(config, Path("Plugin.vst3"), True) == [choices[1]]
+    choices[1].enabled = False
+    assert compatible(config, Path("Plugin.vst3"), True) == [choices[2]]
+    choices[2].path = str(tmp_path / "missing")
+    assert vst3.preferred_destination(config, choices) == choices[0]
+
+
+def test_custom_ambiguity_without_preference_still_requires_choice(tmp_path):
+    config = Config(destinations=[Destination(key, key, [".vst3"], path=str(tmp_path)) for key in ("a", "b")])
+    assert len(compatible(config, Path("Plugin.vst3"), True)) == 2
+    assert "preferred_vst3_destination" not in config.extra
+
+
+def test_settings_auto_detect_adds_and_saves_known_vst3_location(app, monkeypatch, tmp_path):
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog
+    from fldropper import ui
+    folder = tmp_path / "VST3"
+    folder.mkdir()
+    route = Destination("vst3-test", "VST3", [".vst3"], path=str(folder))
+    monkeypatch.setattr(ui.Settings, "find_candidates", staticmethod(lambda: []))
+    monkeypatch.setattr(ui, "verified_destinations", lambda: [route])
+    path = tmp_path / "config.json"
+    dialog = ui.Settings(Config(extra={"catalog_revision": CATALOG_REVISION}), path)
+    dialog.detect()
+    deadline = time.monotonic() + 10
+    while dialog.discovery_worker is not None and time.monotonic() < deadline:
+        QTest.qWait(10)
+        time.sleep(.001)
+    assert dialog.discovery_worker is None
+    assert dialog.config.extra["preferred_vst3_destination"] == route.id
+    assert "VST3 default" in dialog.table.item(0, 0).text()
+    dialog.accept()
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    restored = load(path)
+    assert restored.destinations[0].path == str(folder)
+    assert restored.extra["preferred_vst3_destination"] == route.id
+    dialog.close()
+
+
+def test_chosen_vst3_location_is_saved_and_used_after_restart(app, monkeypatch, tmp_path):
+    from fldropper import ui
+    config = Config(extra={"catalog_revision": CATALOG_REVISION})
+    for key in ("first", "second"):
+        folder = tmp_path / key
+        folder.mkdir()
+        config.destinations.append(Destination(key, key, [".vst3"], path=str(folder)))
+    path = tmp_path / "config.json"
+    save(config, path)
+    window = ui.MainWindow(path)
+    source = tmp_path / "Plugin.vst3"
+    source.write_bytes(b"dummy plugin, never loaded")
+    def choose_second(dialog):
+        dialog.choices[0].setCurrentIndex(dialog.choices[0].findData("second"))
+        dialog.accept()
+        return dialog.result()
+    monkeypatch.setattr(ui.RoutingDialog, "exec", choose_second)
+    window.import_paths([source])
+    wait_idle(window)
+    assert (tmp_path / "second/Plugin.vst3").read_bytes() == source.read_bytes()
+    assert load(path).extra["preferred_vst3_destination"] == "second"
+    window.close()
+    app.processEvents()
+    restored = ui.MainWindow(path)
+    monkeypatch.setattr(ui.RoutingDialog, "exec", lambda _: pytest.fail("Remembered loose VST3 must route automatically"))
+    another = tmp_path / "Another.vst3"
+    another.write_bytes(b"another dummy plugin")
+    restored.import_paths([another])
+    wait_idle(restored)
+    assert (tmp_path / "second/Another.vst3").read_bytes() == another.read_bytes()
+    assert not (tmp_path / "first/Another.vst3").exists()
+    assert restored.destinations.currentData() == "auto"
+    # ZIP packages use the same saved choice even though the archive suffix is .zip.
+    archive = tmp_path / "Archive.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("Bundle.vst3/Contents/MacOS/Bundle", b"dummy binary")
+    package = scan(archive, restored.config.zip_limits, threading.Event())
+    assert [d.id for d in package_choices(restored.config, package)] == ["second"]
+    summary = ui.RoutingDialog(restored.config, [package], "auto")
+    assert summary.choices[0].currentData() == "second"
+    summary.close()
+    restored.close()
     app.processEvents()
 
 

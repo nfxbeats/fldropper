@@ -99,7 +99,9 @@ Windows paths above are examples: the app resolves Windows Known Folders rather 
 
 Existing destinations, custom paths, disabled entries, and the last selection are preserved. A manually configured destination at the same path is retained instead of adding a duplicate. Successfully handled destinations are recorded in `discovered_vst3_destinations`; deleting one later keeps it deleted. Updates save atomically, and malformed configuration is preserved for repair.
 
-Drop a `.vst3` file or bundle folder and confirm the target. Bundles retain their names, internal directories, and resources; internal presets/scripts are treated as plugin assets. ZIP packages containing bundles can also use VST3 destinations and retain the normal package layout. Multiple compatible destinations require a choice. Links inside packages are skipped and reported. The app copies plugins without loading them or running an installer; vendor installers may be needed for plugins with additional dependencies. Protected folders report permission failures; the app does not elevate. Host support for user-local folders should be checked in your FL Studio version.
+Auto Detect remembers your VST3 destination in `preferred_vst3_destination`, including after restarting. For newly discovered standard locations, it prefers the current-user folder, then the native system folder; it never chooses a 32-bit folder over an available native folder. If several custom VST3 locations need a choice, the location you confirm becomes the default for later imports. Choosing another VST3 destination for an import updates that preference. Disabled or unavailable locations are not used as the preferred route. Settings labels the selected location **VST3 default**. **Settings → Auto detect folders** also adds verified VST3 locations; click **Save** to keep them and the default.
+
+Drop a `.vst3` file to copy it to the preferred location automatically. Bundle folders and ZIP packages still show the import summary with the preferred destination preselected. Bundles retain their names, internal directories, and resources; internal presets/scripts are treated as plugin assets. ZIP packages containing bundles retain the normal package layout. Multiple custom destinations without a preference require a choice once. Links inside packages are skipped and reported. The app copies plugins without loading them or running an installer; vendor installers may be needed for plugins with additional dependencies. Protected folders report permission failures; the app does not elevate. Host support for user-local folders should be checked in your FL Studio version.
 
 Paths verified against [Steinberg's VST3 plug-in locations](https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical%2BDocumentation/Locations%2BFormat/Plugin%2BLocations.html) and [Microsoft's Known Folder identifiers](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid). The optional network and application-private locations are not automatically added. Windows Known Folder resolution and temporary-file copy workflows are tested on Windows; macOS discovery is covered by mocked platform tests, without live macOS or in-FL-Studio validation.
 
@@ -128,10 +130,14 @@ Implementation details and development checks are in [devnotes.md](devnotes.md).
 
 ## Standalone builds with GitHub Actions
 
-To build locally on Windows, double-click **build.bat**, or run
-`.\build.bat --no-pause` in PowerShell. It installs build dependencies in the
-project `.venv`, builds and checks the app, and writes the versioned ZIP to
-`.github/packaging/dist`. Python 3.12 or newer is required to build.
+To start the GitHub Actions build from Windows, install [GitHub CLI](https://cli.github.com),
+run `gh auth login`, then double-click **build.bat** or run
+`.\build.bat --no-pause` in PowerShell. Commit and push your changes first.
+The BAT file verifies a clean checkout and matching local/remote commits, then
+starts **Build desktop apps** on the current branch in the `origin` repository.
+Windows and macOS ZIPs appear in the workflow's artifacts, named using the
+version in the pushed commit. It does not publish a GitHub Release.
+Use `.\build.bat --check` to verify prerequisites without starting a build.
 
 The current version is defined by `__version__` in `fldropper/__init__.py`.
 It also supplies the Python package version, window title, and build filenames.

@@ -1,11 +1,18 @@
 # GitHub desktop builds
 
-For a local Windows build, double-click `build.bat` in the repository root,
-or run `.\build.bat --no-pause` from PowerShell. It uses the project `.venv`
-(creating one if needed with Python 3.12+), installs the same build dependencies
-as CI, builds the app, checks bundled startup, and creates a ZIP under
-`.github/packaging/dist`. The ZIP name always reads the current version from
-`fldropper/__init__.py`; there is no version to edit in the BAT file.
+To trigger the GitHub build from Windows, install GitHub CLI, run `gh auth login`,
+commit and push your changes, then double-click `build.bat` in the repository
+root or run `.\build.bat --no-pause`. It requires a clean checkout, fetches the
+current branch from `origin`, verifies that the remote commit matches HEAD,
+and dispatches `pyinstaller-build.yaml` on that branch. It prints recent runs
+so you can follow progress. `.\build.bat --check` checks prerequisites without
+dispatching. Python is not required locally; builds run on GitHub's runners.
+The ZIP names read `fldropper/__init__.py` from the pushed commit. The script
+does not commit, push, tag, or publish a release.
+
+For a local build instead, install the CI build dependencies in your project
+`.venv` and run `python .github/packaging/build.py`. Local ZIPs are written to
+`.github/packaging/dist`.
 
 Push these tracked helpers and `.github/workflows/pyinstaller-build.yaml` to
 GitHub. Open **Actions → Build desktop apps → Run workflow**. Pushing a `v*` tag

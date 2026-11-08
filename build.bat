@@ -3,46 +3,67 @@ setlocal
 pushd "%~dp0" || exit /b 1
 set "FLDROPPER_BUILD_EXIT=1"
 
-if exist ".venv\Scripts\python.exe" goto check_venv
-py -3 -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
-if not errorlevel 1 (
-    py -3 -m venv ".venv"
-    if errorlevel 1 goto finish
-    goto check_venv
-)
-python -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>&1
+where /q git
 if errorlevel 1 (
-    echo Python 3.12 or newer is required. Run setup.bat first, then rerun build.bat.
+    echo Install Git for Windows, then rerun build.bat.
     goto finish
 )
-python -m venv ".venv"
-if errorlevel 1 goto finish
-
-:check_venv
-".venv\Scripts\python.exe" -c "import sys, pathlib, pip; expected = pathlib.Path('.venv').resolve(); raise SystemExit(sys.version_info < (3, 12) or sys.prefix == sys.base_prefix or pathlib.Path(sys.prefix).resolve() != expected)" >nul 2>&1
+where /q gh
 if errorlevel 1 (
-    echo The project .venv is not usable. Run setup.bat to repair it, then rerun build.bat.
+    echo Install GitHub CLI from https://cli.github.com and run gh auth login.
+    goto finish
+)
+gh auth status >nul 2>&1
+if errorlevel 1 (
+    echo Run gh auth login, then rerun build.bat.
+    goto finish
+)
+set "FLDROPPER_BUILD_BRANCH="
+for /f "delims=" %%B in ('git symbolic-ref --quiet --short HEAD') do set "FLDROPPER_BUILD_BRANCH=%%B"
+if not defined FLDROPPER_BUILD_BRANCH (
+    echo Check out the branch you want to build, then rerun build.bat.
+    goto finish
+)
+set "FLDROPPER_BUILD_DIRTY="
+for /f "delims=" %%S in ('git status --porcelain') do set "FLDROPPER_BUILD_DIRTY=1"
+if defined FLDROPPER_BUILD_DIRTY (
+    echo Commit and push your changes first. GitHub Actions builds the pushed code.
+    goto finish
+)
+set "FLDROPPER_BUILD_REPO="
+for /f "delims=" %%R in ('git remote get-url origin') do set "FLDROPPER_BUILD_REPO=%%R"
+if not defined FLDROPPER_BUILD_REPO (
+    echo Configure the origin remote for your GitHub repository first.
+    goto finish
+)
+echo Checking the pushed version on origin/%FLDROPPER_BUILD_BRANCH%...
+git fetch --quiet origin "%FLDROPPER_BUILD_BRANCH%"
+if errorlevel 1 goto finish
+for /f %%H in ('git rev-parse HEAD') do set "FLDROPPER_BUILD_LOCAL=%%H"
+for /f %%H in ('git rev-parse FETCH_HEAD') do set "FLDROPPER_BUILD_REMOTE=%%H"
+if not "%FLDROPPER_BUILD_LOCAL%"=="%FLDROPPER_BUILD_REMOTE%" (
+    echo Local and GitHub commits differ. Synchronize your branch and push before building.
+    goto finish
+)
+if /i "%~1"=="--check" (
+    echo Checks passed. No workflow was started.
+    set "FLDROPPER_BUILD_EXIT=0"
     goto finish
 )
 
-echo Building the version defined in fldropper\__init__.py:
-".venv\Scripts\python.exe" -c "import runpy; print(runpy.run_path('fldropper/__init__.py')['__version__'])"
-if errorlevel 1 goto finish
-
-echo Installing application and build dependencies...
-".venv\Scripts\python.exe" -m pip install . "PyInstaller==6.22.3" "Pillow>=10,<13"
-if errorlevel 1 goto finish
-
-echo Building, checking the bundled app, and creating the versioned ZIP...
-".venv\Scripts\python.exe" ".github\packaging\build.py"
+echo Starting GitHub Actions: Build desktop apps on %FLDROPPER_BUILD_BRANCH%...
+gh workflow run pyinstaller-build.yaml --repo "%FLDROPPER_BUILD_REPO%" --ref "%FLDROPPER_BUILD_BRANCH%"
 if errorlevel 1 goto finish
 
 echo.
-echo Build complete. The versioned ZIP is in .github\packaging\dist.
+echo Workflow requested. Windows and macOS ZIPs will be available in its artifacts.
+echo The build version comes from fldropper/__init__.py in the pushed commit.
+gh run list --repo "%FLDROPPER_BUILD_REPO%" --workflow pyinstaller-build.yaml --branch "%FLDROPPER_BUILD_BRANCH%" --limit 3
 set "FLDROPPER_BUILD_EXIT=0"
 
 :finish
-if not "%FLDROPPER_BUILD_EXIT%"=="0" echo Build failed. Check the error above.
+if not "%FLDROPPER_BUILD_EXIT%"=="0" echo Workflow was not started. Check the error above.
 popd
+if /i "%~1"=="--check" exit /b %FLDROPPER_BUILD_EXIT%
 if /i not "%~1"=="--no-pause" pause
 exit /b %FLDROPPER_BUILD_EXIT%

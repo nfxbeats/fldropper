@@ -4,6 +4,7 @@ from dataclasses import replace
 from .config import Config, Destination
 from .catalog import PLUGIN_PRESETS, NATIVE_PRESET_PLUGINS
 from .transfers import Package, vst3_container
+from .vst3 import preferred_destination
 
 
 def needs_plugin_name(package: Package) -> bool:
@@ -82,6 +83,9 @@ def compatible(config: Config, path: Path, automatic: bool = False,
                plugin_name: str | None = None, plugin_kind: str | None = None, fst_type: str | None = None) -> list[Destination]:
     choices = [d for d in config.destinations if d.enabled and d.accepts(path)
             and (not automatic or (d.automatic and bool(d.extensions)))]
+    if automatic and path.suffix.casefold() == ".vst3":
+        preferred = preferred_destination(config, choices)
+        return [preferred] if preferred else choices
     if automatic and path.suffix.casefold() == ".fst" and fst_type == "mixer":
         return [d for d in choices if d.id == "mixer"]
     if automatic and path.suffix.casefold() == ".fst":
@@ -100,6 +104,9 @@ def compatible(config: Config, path: Path, automatic: bool = False,
 
 
 def package_choices(config: Config, package: Package, automatic: bool = True) -> list[Destination]:
+    if is_vst3_package(package):
+        return [d for d in compatible(config, Path("plugin.vst3"), automatic)
+                if package_matches(config, package.planned_files, d, package.source)[0]]
     if not package.has_scripts:
         primary = {p.suffix.casefold() for p in package.planned_files} & ({".fsc", ".mid", ".midi", ".fst", ".flp", ".pyscript", ".zgeproj", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys())
         if automatic and primary == {".chenv"}:
@@ -115,6 +122,10 @@ def package_choices(config: Config, package: Package, automatic: bool = True) ->
     return [d for d in choices if
             (not package.script_kind or d.id not in ("piano", "edison", "hardware") or d.id == package.script_kind) and
             (not d.extensions or any(d.accepts(p) for p in package.planned_files))]
+
+
+def is_vst3_package(package: Package) -> bool:
+    return package.source.suffix.casefold() == ".vst3" or any(vst3_container(p) for p in package.planned_files)
 
 
 def group_loose_scripts(packages: list[Package], cancel=None) -> list[Package]:

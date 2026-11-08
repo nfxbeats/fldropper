@@ -172,6 +172,8 @@ def parse(data: dict) -> Config:
     selection = data.get("last_selection", "auto")
     if not isinstance(selection, str):
         raise ConfigError("Last selection must be a string.")
+    if not isinstance(data.get("preferred_vst3_destination", ""), str):
+        raise ConfigError("Preferred VST3 destination must be a destination ID string.")
     always_replace = data.get("always_replace_duplicates", False)
     if type(always_replace) is not bool:
         raise ConfigError("Always replace duplicates must be a boolean.")

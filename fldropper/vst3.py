@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from .config import Config, Destination
+from .config import Config, Destination, resolve
 from .discovery import known_folder
 from .transfers import checked_ancestors
 
@@ -74,4 +74,38 @@ def add_missing_destinations(config: Config, verified: list[Destination]) -> lis
         handled.add(destination.id)
     if handled:
         config.extra["discovered_vst3_destinations"] = sorted(handled)
+    choose_default_destination(config)
     return added
+
+
+def preferred_destination(config: Config, choices: list[Destination]) -> Destination | None:
+    """Use a saved choice, then documented user/native folders, never list order."""
+    usable = {}
+    for destination in choices:
+        if not destination.enabled or not destination.automatic or ".vst3" not in destination.extensions:
+            continue
+        try:
+            root, target = resolve(config, destination)
+            if not root.is_dir() or not os.access(root, os.R_OK | os.X_OK):
+                continue
+            checked_ancestors(target)
+            usable[destination.id] = destination
+        except (OSError, ValueError):
+            continue
+    remembered = config.extra.get("preferred_vst3_destination")
+    if isinstance(remembered, str) and remembered in usable:
+        return usable[remembered]
+    preferred_ids = {
+        "win32": ("vst3-windows-user", "vst3-windows-global"),
+        "darwin": ("vst3-macos-user", "vst3-macos-global"),
+    }.get(sys.platform, ())
+    for key in preferred_ids:
+        if key in usable:
+            return usable[key]
+    return next(iter(usable.values())) if len(usable) == 1 else None
+
+
+def choose_default_destination(config: Config) -> None:
+    destination = preferred_destination(config, config.destinations)
+    if destination is not None:
+        config.extra["preferred_vst3_destination"] = destination.id
