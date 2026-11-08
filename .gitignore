@@ -16,7 +16,8 @@ config.json
 htmlcov/
 
 # Local development, research, and sample content (not needed to run the app)
-/tests/
+/tests/*
+!/tests/test_vst3.py
 /reports/
 /tools/
 /sample-fst/

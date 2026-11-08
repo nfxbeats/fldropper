@@ -23,6 +23,7 @@ from .branding import APP_IMAGE, WINDOW_ICON, WindowsIcons, set_windows_app_id
 from .discovery import Candidate, PluginFolderSearch, find_plugin_folders, installation_suggestions, registry_candidates, user_suggestions, validate_root
 from .routing import compatible, fst_package_groups, matches_plugin, package_matches, package_choices, group_loose_scripts, needs_plugin_name
 from .transfers import Cancelled, Job, Package, Result, run_jobs, safe_relative, scan, validate_target, is_link
+from .vst3 import add_missing_destinations, verified_destinations
 
 
 STYLE = """
@@ -706,7 +707,7 @@ class RoutingDialog(QDialog):
                     if keep:
                         ok = d.accepts(pkg.source) and (not d.extensions or (".flp" in d.extensions and any(f.suffix.casefold() == ".flp" for f in pkg.files)))
                     elif pkg.is_zip or pkg.source.is_dir():
-                        ok, _bad = package_matches(config, pkg.planned_files, d)
+                        ok, _bad = package_matches(config, pkg.planned_files, d, pkg.source)
                     else:
                         ok = d.accepts(pkg.source)
                     if ok:
@@ -720,7 +721,7 @@ class RoutingDialog(QDialog):
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = package_choices(config, pkg) if pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
+                suggested = package_choices(config, pkg) if pkg.source.suffix.casefold() == ".vst3" or pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:
@@ -736,7 +737,7 @@ class RoutingDialog(QDialog):
             problems = []
             for p in packages:
                 if p.is_zip or p.source.is_dir():
-                    ok, bad = package_matches(config, p.planned_files, explicit)
+                    ok, bad = package_matches(config, p.planned_files, explicit, p.source)
                     if not ok:
                         problems.append(f"{p.source.name}: incompatible or unrecognized primary content" +
                                         (" (" + ", ".join(bad[:3]) + ")" if bad else ""))
@@ -1004,6 +1005,37 @@ class MainWindow(QMainWindow):
             return candidates
 
         self.start_worker(discover, self.missing_roots_detected)
+
+    def check_destination_updates(self):
+        """Run a local, additive destination update on every application launch."""
+        if self.config_error or self.worker:
+            return
+        self.status.setText("Checking for VST3 destination updates…")
+        self.start_worker(lambda _: verified_destinations(), self.destination_updates_checked)
+
+    def destination_updates_checked(self, verified):
+        if isinstance(verified, Exception):
+            self.status.setText(f"Could not check VST3 destinations: {verified}")
+            self.details.appendPlainText(self.status.text())
+        else:
+            trial = copy.deepcopy(self.config)
+            added = add_missing_destinations(trial, verified)
+            if trial.to_dict() != self.config.to_dict():
+                try:
+                    if self.config_path.exists():
+                        load(self.config_path)
+                    save(trial, self.config_path)
+                    self.config = trial
+                    self.refresh()
+                    self.status.setText("Added " + ", ".join(added) + "." if added else "VST3 destinations checked.")
+                    if added:
+                        self.details.appendPlainText("Destination update: added " + ", ".join(added))
+                except (ConfigError, OSError) as exc:
+                    self.status.setText(f"Could not save VST3 destinations: {exc}")
+                    self.details.appendPlainText(self.status.text())
+            else:
+                self.status.setText("VST3 destinations checked; no changes needed.")
+        self.detect_missing_roots()
 
     def missing_roots_detected(self, candidates):
         if isinstance(candidates, Exception):
@@ -1475,5 +1507,5 @@ def main():
     app = create_application()
     window = MainWindow()
     window.show()
-    window.detect_missing_roots()
+    window.check_destination_updates()
     sys.exit(app.exec())

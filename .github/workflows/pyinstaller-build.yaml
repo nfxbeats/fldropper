@@ -10,7 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  check-version:
+    name: Verify release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check tag matches application version
+        run: python3 .github/packaging/check_version.py
+
   build:
+    needs: check-version
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -42,12 +52,11 @@ jobs:
         id: package
         run: python .github/packaging/build.py
       - name: Upload distributable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.package.outputs.artifact_name }}
+          archive: false
           path: ${{ steps.package.outputs.archive_path }}
           if-no-files-found: error
-          compression-level: 0
           retention-days: 14
       - name: Upload build diagnostics on failure
         if: failure()

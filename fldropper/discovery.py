@@ -210,6 +210,13 @@ def validate_root(path: Path, kind: str) -> None:
 def documents_folder() -> Path | None:
     if os.name != "nt":
         return None
+    return known_folder("FDD39AD0-238F-46AF-ADB4-6C85480369C7")
+
+
+def known_folder(folder_id: str) -> Path | None:
+    """Resolve a Windows Known Folder without creating it."""
+    if os.name != "nt":
+        return None
     import ctypes
     from ctypes import wintypes
     import uuid
@@ -217,7 +224,7 @@ def documents_folder() -> Path | None:
     class GUID(ctypes.Structure):
         _fields_ = [("data", ctypes.c_ubyte * 16)]
 
-    guid = GUID.from_buffer_copy(uuid.UUID("FDD39AD0-238F-46AF-ADB4-6C85480369C7").bytes_le)
+    guid = GUID.from_buffer_copy(uuid.UUID(folder_id).bytes_le)
     result = wintypes.LPWSTR()
     shell = ctypes.windll.shell32
     shell.SHGetKnownFolderPath.argtypes = [ctypes.POINTER(GUID), wintypes.DWORD,

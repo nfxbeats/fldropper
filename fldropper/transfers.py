@@ -26,6 +26,14 @@ def check_cancel(cancel: threading.Event) -> None:
         raise Cancelled()
 
 
+def vst3_container(path: Path) -> Path | None:
+    """Return the outer VST3 bundle path, keeping its assets together."""
+    for index, part in enumerate(path.parts):
+        if Path(part).suffix.casefold() == ".vst3":
+            return Path(*path.parts[:index + 1])
+    return None
+
+
 def is_link(path: Path) -> bool:
     st = path.lstat()
     return stat.S_ISLNK(st.st_mode) or bool(getattr(st, "st_file_attributes", 0) & 0x400)
@@ -179,6 +187,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             for info in archive.infolist():
                 check_cancel(cancel)
                 relative = safe_relative(info.filename)
+                if vst3_container(relative):
+                    continue
                 if not info.is_dir() and relative.suffix.casefold() == ".fst":
                     with archive.open(info) as stream:
                         prefix = stream.read(min(MAX_PREFIX, info.file_size))
@@ -279,6 +289,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
             else:
                 skipped.append(f"{child}: special entry skipped")
     visit(source)
+    if source.suffix.casefold() == ".vst3":
+        return Package(source, files, skipped, directories=directories)
     from .fst import inspect_file
     plugins = {}
     kinds = {}
@@ -288,6 +300,8 @@ def scan(source: Path, limits: dict[str, int], cancel: threading.Event, fxp_look
     database_names = {}
     for relative in files:
         check_cancel(cancel)
+        if vst3_container(relative):
+            continue
         if relative.suffix.casefold() == ".fst":
             checked_ancestors(source / relative)
             metadata = inspect_file(source / relative)
@@ -325,7 +339,7 @@ def inspect_script_files(package: Package, cancel: threading.Event | None = None
     for relative in package.planned_files:
         if cancel:
             check_cancel(cancel)
-        if relative.suffix.casefold() in (".py", ".pyscript"):
+        if not vst3_container(relative) and relative.suffix.casefold() in (".py", ".pyscript"):
             path = package.source / relative if package.source.is_dir() else package.source
             checked_ancestors(path)
             with path.open("rb") as stream:

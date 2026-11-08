@@ -3,7 +3,7 @@ from dataclasses import replace
 
 from .config import Config, Destination
 from .catalog import PLUGIN_PRESETS, NATIVE_PRESET_PLUGINS
-from .transfers import Package
+from .transfers import Package, vst3_container
 
 
 def needs_plugin_name(package: Package) -> bool:
@@ -13,7 +13,9 @@ def needs_plugin_name(package: Package) -> bool:
 
 def fst_package_groups(package: Package, *, split: bool = True) -> list[Package]:
     """Separate FSTs by outer plugin while preserving package-relative paths."""
-    if not split or package.has_scripts or not package.file_plugins or any(p.suffix.casefold() == ".flp" for p in package.files):
+    if (not split or package.source.suffix.casefold() == ".vst3" or
+            any(vst3_container(p) for p in package.files) or package.has_scripts or
+            not package.file_plugins or any(p.suffix.casefold() == ".flp" for p in package.files)):
         return [package]  # Project packages retain their intact-ZIP choice.
     other_primary = {".flp", ".pyscript", ".zgeproj", ".mid", ".midi", ".fsc", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys()
     companions = [p for p in package.files if p not in package.file_plugins and p.suffix.casefold() not in other_primary]
@@ -137,12 +139,18 @@ def group_loose_scripts(packages: list[Package], cancel=None) -> list[Package]:
     return result
 
 
-def package_matches(config: Config, paths: list[Path], dest: Destination) -> tuple[bool, list[str]]:
+def package_matches(config: Config, paths: list[Path], dest: Destination,
+                    source: Path | None = None) -> tuple[bool, list[str]]:
     """Recognized content must match; unknown companion assets travel with it."""
     if not dest.extensions:
         return True, []
+    # A bundle's internal binaries, resources and scripts form one plugin.
+    # Validate the bundle extension, rather than treating its assets as presets.
+    if source is not None and source.suffix.casefold() == ".vst3":
+        return dest.accepts(source), [] if dest.accepts(source) else [source.name]
+    paths = list(dict.fromkeys(vst3_container(p) or p for p in paths))
     recognized = {ext for d in config.destinations for ext in d.extensions} - {".zip"}
-    primary = {".pyscript", ".zgeproj", ".fst", ".flp", ".mid", ".midi", ".fsc", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys()
+    primary = {".vst3", ".pyscript", ".zgeproj", ".fst", ".flp", ".mid", ".midi", ".fsc", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys()
     present = [p for p in paths if p.suffix.casefold() in primary]
     if not present:
         present = [p for p in paths if p.suffix.casefold() in recognized]

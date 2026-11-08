@@ -83,6 +83,26 @@ Click the **folder-plus icon**, choose a folder, and enter the plugin name. The 
 
 Use **Settings** to rename, edit, disable, or delete destinations and change their accepted file extensions. A destination with no extensions accepts any file when selected manually. Samples and projects can go into folders of your choice. The Scores destination is also editable.
 
+### VST3 plugins and destination updates
+
+On every launch, FL Dropper checks for these documented VST3 folders and adds missing destinations to that copy's configuration:
+
+| Platform | Location |
+| --- | --- |
+| Windows, current user | `%LOCALAPPDATA%\Programs\Common\VST3` |
+| Windows, all users, 64-bit | `C:\Program Files\Common Files\VST3` |
+| Windows, all users, 32-bit | `C:\Program Files (x86)\Common Files\VST3` |
+| macOS, current user | `~/Library/Audio/Plug-ins/VST3` |
+| macOS, all users | `/Library/Audio/Plug-ins/VST3` |
+
+Windows paths above are examples: the app resolves Windows Known Folders rather than hardcoding the drive or querying plugin registry keys. Only existing, readable directories without symlink/reparse-point ancestors are added. The check does not create system folders. If a folder is absent, later launches check again; you can also configure a destination manually in Settings. This is a local configuration update check, with no downloads or network requests.
+
+Existing destinations, custom paths, disabled entries, and the last selection are preserved. A manually configured destination at the same path is retained instead of adding a duplicate. Successfully handled destinations are recorded in `discovered_vst3_destinations`; deleting one later keeps it deleted. Updates save atomically, and malformed configuration is preserved for repair.
+
+Drop a `.vst3` file or bundle folder and confirm the target. Bundles retain their names, internal directories, and resources; internal presets/scripts are treated as plugin assets. ZIP packages containing bundles can also use VST3 destinations and retain the normal package layout. Multiple compatible destinations require a choice. Links inside packages are skipped and reported. The app copies plugins without loading them or running an installer; vendor installers may be needed for plugins with additional dependencies. Protected folders report permission failures; the app does not elevate. Host support for user-local folders should be checked in your FL Studio version.
+
+Paths verified against [Steinberg's VST3 plug-in locations](https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical%2BDocumentation/Locations%2BFormat/Plugin%2BLocations.html) and [Microsoft's Known Folder identifiers](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid). The optional network and application-private locations are not automatically added. Windows Known Folder resolution and temporary-file copy workflows are tested on Windows; macOS discovery is covered by mocked platform tests, without live macOS or in-FL-Studio validation.
+
 ## Update
 
 Close FL Dropper and update or replace the downloaded app files, keeping your `config.json` to preserve settings. On Windows, rerun **setup.bat**, then launch with the desktop shortcut or **run.bat**. On macOS, rerun `bash setup.command`, then open **FL Dropper.app**.
@@ -110,21 +130,23 @@ Implementation details and development checks are in [devnotes.md](devnotes.md).
 
 The current version is defined by `__version__` in `fldropper/__init__.py`.
 It also supplies the Python package version, window title, and build filenames.
-For example, Windows beta builds use `FLDropper-0.9.0b1-Windows-AMD64.zip`;
-the GitHub Actions artifact has the same name without `.zip`.
+The source macOS launcher's `FL Dropper.app/Contents/Info.plist` records the
+numeric release `0.9.0` and build `4`; keep its metadata in sync for releases.
+For example, Windows beta builds use `FLDropper-0.9.0b4-Windows-AMD64.zip`;
+the GitHub Actions download is that ZIP directly, without an outer archive.
 
 To release an update, change that one version value and commit it. Use
-`0.9.0b2` for the next beta, `0.9.0` for the stable release, and versions such
+`0.9.0b5` for the next beta, `0.9.0` for the stable release, and versions such
 as `0.9.1` for subsequent fixes. Push a matching tag (for example,
-`git tag v0.9.0b2` followed by `git push origin v0.9.0b2`) to trigger builds,
+`git tag v0.9.0b4` followed by `git push origin v0.9.0b4`) to trigger builds,
 or run the workflow manually. Filenames always use the committed version.
 The older `v0.9.0.beta` tag is left unchanged; `0.9.0b1` uses Python's standard
 beta version spelling. Configuration schema versions are independent.
 
 After pushing the repository, open **Actions → Build desktop apps → Run workflow**.
 The workflow builds Windows x64, macOS Apple Silicon, and macOS Intel apps with
-PyInstaller. Download your platform's artifact from the completed run and extract
-the distribution ZIP inside it. Keep the entire Windows app folder (including
+PyInstaller. Download your platform's ZIP from the completed run and extract
+it once. Keep the entire Windows app folder (including
 `_internal`) or the complete Mac `.app` bundle together. Python is not required
 to run these builds. Builds are unsigned and Mac interactive behavior still
 needs verification. See [build details](.github/packaging/README.md).
