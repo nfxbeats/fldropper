@@ -292,7 +292,7 @@ class Settings(QDialog):
 
     @staticmethod
     def find_candidates():
-        registered = registry_candidates()
+        registered = registry_candidates() if sys.platform != "darwin" else []
         data = [("user_data", c.path, c.source) for c in registered] if registered else [
             ("user_data", p, "Conventional Documents suggestion") for p in user_suggestions(include_registry=False)]
         data += [("shared_data", c.shared_root, c.source) for c in registered if c.shared_root is not None]
@@ -1008,7 +1008,7 @@ class MainWindow(QMainWindow):
             for kind, path, source in Settings.find_candidates():
                 try:
                     validate_root(path, kind)
-                    if kind == "user_data" and not ((path / "Settings").is_dir() and
+                    if sys.platform != "darwin" and kind == "user_data" and not ((path / "Settings").is_dir() and
                             any((path / name).is_dir() for name in ("Presets", "Projects"))):
                         continue
                     candidates.append((kind, path, source))
@@ -1062,13 +1062,17 @@ class MainWindow(QMainWindow):
                 continue
             if trial.roots.get(kind):
                 continue
+            if kind == "shared_data" and trial.roots.get("user_data"):
+                # Do not pair an existing custom User Data root with a discovered
+                # conventional parent; let Settings manage that relationship.
+                continue
             options = {str(path).casefold(): path for candidate_kind, path, _ in candidates if candidate_kind == kind}
             if len(options) == 1:
                 trial.roots[kind] = str(next(iter(options.values())))
                 filled.append(label)
             else:
                 unresolved.append(label)
-        if trial.roots.get("shared_data"):
+        if trial.roots.get("shared_data") and not trial.roots.get("user_data"):
             derived = str(Path(trial.roots["shared_data"]) / "FL Studio")
             if trial.roots.get("user_data") != derived:
                 trial.roots["user_data"] = derived

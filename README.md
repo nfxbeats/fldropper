@@ -36,7 +36,11 @@ Close FL Dropper before rerunning setup to repair or update it. Settings and oth
 
 Keep **FL Dropper.app** in the downloaded app folder. To put a shortcut elsewhere, create a Finder alias rather than moving the app launcher. For troubleshooting, run `bash run.command` in Terminal to see errors, or check `~/Library/Logs/FLDropper.log`.
 
-macOS support is experimental and has not been verified on a Mac. Automatic FL Studio folder discovery currently supports Windows only. On macOS, configure folders manually in Settings. Installation-folder validation checks that the selected folder exists and is accessible; it does not require an FL Studio executable or a particular folder layout on either platform. Choose a root that matches your destinations' relative paths. Copy errors, including insufficient write permissions, report the failing path.
+macOS support is experimental and has not been verified on a Mac. When folder settings are empty, FL Dropper first checks `~/Documents/Image-Line/FL Studio/` for an existing, readable User Data folder and uses it automatically, with `~/Documents/Image-Line/` as Shared User Data. Saved folder choices are preserved.
+
+For the installation, it checks `/Applications` and `~/Applications` for `FL Studio*.app` bundles. It reads `Contents/Info.plist` without launching FL Studio and verifies the declared executable and internal FL resource tree. The installation root is `Contents/Resources/FL` inside the bundle, as described in [Image-Line's installation manual](https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/app_flstudioinstallationfiles.htm). The newest identifiable version is used automatically; equal-version installations require a choice in Settings. Versions come from `CFBundleShortVersionString`, falling back to a numeric app name when needed. Short majors such as `26` and year majors such as `2026` compare equally; no current release year is hardcoded. Unversioned bundles are offered only if no versioned installation is found.
+
+Discovery is optional: browse manually in Settings for moved apps or custom User Data locations. Manual installation-folder validation checks existence and access without requiring a particular layout. Choose a root that matches your destinations' relative paths. Copy errors, including insufficient write permissions, report the failing path. macOS folder discovery is tested with synthetic bundles and platform mocks on Windows; live Mac discovery and in-FL-Studio imports remain unverified.
 
 ## First-time setup
 

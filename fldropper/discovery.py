@@ -1,8 +1,10 @@
-"""Read-only Windows discovery; saved paths always take precedence."""
+"""Read-only platform discovery; saved paths always take precedence."""
 from __future__ import annotations
 
 import os
+import plistlib
 import re
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,7 +250,8 @@ def install_candidates(bases: list[Path] | None = None) -> list[Path]:
             for path in base.glob("FL Studio*"):
                 try:
                     validate_root(path, "fl_install")
-                    candidates.add(path)
+                    if (path / "FL64.exe").is_file() and (path / "Plugins").is_dir():
+                        candidates.add(path)
                 except (ValueError, OSError):
                     pass
         except OSError:
@@ -257,6 +260,8 @@ def install_candidates(bases: list[Path] | None = None) -> list[Path]:
 
 
 def installation_suggestions() -> list[Candidate]:
+    if sys.platform == "darwin":
+        return macos_installation_suggestions()
     candidates = registry_candidates(kind="fl_install") + [
         Candidate(path, "Conventional installation suggestion") for path in install_candidates()]
     unique = {}
@@ -272,6 +277,13 @@ def installation_suggestions() -> list[Candidate]:
 
 
 def user_suggestions(*, include_registry: bool = True) -> list[Path]:
+    if sys.platform == "darwin":
+        path = Path.home() / "Documents/Image-Line/FL Studio"
+        try:
+            validate_root(path, "user_data")
+            return [path]
+        except (OSError, ValueError):
+            return []
     registered = registry_candidates() if include_registry else []
     if registered:
         return [candidate.path for candidate in registered]
@@ -280,3 +292,62 @@ def user_suggestions(*, include_registry: bool = True) -> list[Path]:
         return []
     # Suggestions only: the active root must be confirmed against FL's File settings.
     return [p for p in (docs / "Image-Line" / "FL Studio", docs / "Image-Line") if p.is_dir()]
+
+
+def _macos_version(value: str) -> tuple[int, ...]:
+    """Compare numeric releases, including short (26) and year (2026) majors."""
+    if not isinstance(value, str) or not re.fullmatch(r"\d+(?:\.\d+)*", value):
+        return ()
+    parts = [int(part) for part in value.split(".")]
+    if 20 <= parts[0] < 100:
+        parts[0] += 2000
+    # 2026 and 2026.0 describe the same release.
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def macos_installation_suggestions(bases: list[Path] | None = None) -> list[Candidate]:
+    """Return the newest verified bundle roots, retaining ties for user choice.
+
+    Read bundle metadata without launching FL Studio. A missing/malformed plist,
+    absent executable, or missing internal FL resource tree is not an install.
+    Unversioned bundles remain choices only when no version can be identified.
+    """
+    if bases is None:
+        bases = [Path("/Applications"), Path.home() / "Applications"]
+    found: dict[str, tuple[tuple[int, ...], Candidate]] = {}
+    for base in bases:
+        try:
+            bundles = list(base.glob("FL Studio*.app"))
+        except OSError:
+            continue
+        for bundle in bundles:
+            try:
+                from .transfers import checked_ancestors
+                root = bundle / "Contents/Resources/FL"
+                checked_ancestors(root)
+                validate_root(root, "fl_install")
+                with (bundle / "Contents/Info.plist").open("rb") as stream:
+                    info = plistlib.load(stream)
+                if not isinstance(info, dict):
+                    continue
+                executable = info.get("CFBundleExecutable")
+                if (not isinstance(executable, str) or not executable or
+                        Path(executable).name != executable or "/" in executable or "\\" in executable):
+                    continue
+                binary = bundle / "Contents/MacOS" / executable
+                checked_ancestors(binary)
+                if not binary.is_file() or not any((root / marker).is_dir() for marker in ("Plugins", "Data")):
+                    continue
+                version = _macos_version(info.get("CFBundleShortVersionString", ""))
+                if not version:
+                    match = re.fullmatch(r"FL Studio[ -]*(\d+(?:\.\d+)*)", bundle.stem, re.IGNORECASE)
+                    version = _macos_version(match[1]) if match else ()
+                label = ".".join(map(str, version)) if version else "unknown version"
+                found.setdefault(str(root), (version, Candidate(root, f"macOS app bundle · {label}")))
+            except (OSError, ValueError, plistlib.InvalidFileException):
+                continue
+    newest = max((version for version, _ in found.values()), default=())
+    return sorted((candidate for version, candidate in found.values() if version == newest),
+                  key=lambda c: str(c.path).casefold())

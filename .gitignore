@@ -19,6 +19,7 @@ htmlcov/
 /tests/*
 !/tests/test_vst3.py
 !/tests/test_build_trigger.py
+!/tests/test_discovery.py
 /reports/
 /tools/
 /sample-fst/
