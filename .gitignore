@@ -20,6 +20,7 @@ htmlcov/
 !/tests/test_vst3.py
 !/tests/test_build_trigger.py
 !/tests/test_discovery.py
+!/tests/test_zge.py
 /reports/
 /tools/
 /sample-fst/

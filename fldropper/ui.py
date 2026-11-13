@@ -728,7 +728,7 @@ class RoutingDialog(QDialog):
                             combo.setItemData(combo.count() - 1, str(target), Qt.ItemDataRole.ToolTipRole)
                         except ValueError:
                             pass
-                suggested = package_choices(config, pkg) if is_vst3_package(pkg) or pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi") for f in pkg.planned_files) else []
+                suggested = package_choices(config, pkg) if is_vst3_package(pkg) or pkg.plugin_name or pkg.has_scripts or any(f.suffix.casefold() in (".fsc", ".mid", ".midi", ".zgeproj") for f in pkg.planned_files) else []
                 preferred = prior or (explicit.id if explicit else suggested[0].id if len(suggested) == 1 else None)
                 index = combo.findData(preferred) if preferred else -1
                 if index > 0:

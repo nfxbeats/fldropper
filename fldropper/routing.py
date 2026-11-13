@@ -109,6 +109,11 @@ def package_choices(config: Config, package: Package, automatic: bool = True) ->
                 if package_matches(config, package.planned_files, d, package.source)[0]]
     if not package.has_scripts:
         primary = {p.suffix.casefold() for p in package.planned_files} & ({".fsc", ".mid", ".midi", ".fst", ".flp", ".pyscript", ".zgeproj", ".fxp", ".h2p", ".chenv"} | NATIVE_PRESET_PLUGINS.keys())
+        if automatic and ".zgeproj" in primary:
+            # Route objects by their contents, never by the enclosing ZIP suffix.
+            # Mixed primary content still needs a single compatible destination.
+            return [d for d in compatible(config, Path("object.zgeproj"), automatic)
+                    if package_matches(config, package.planned_files, d, package.source)[0]]
         if automatic and primary == {".chenv"}:
             return compatible(config, Path("envelope.chenv"), automatic)
         if automatic and primary and primary <= {".fsc", ".mid", ".midi"}:

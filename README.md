@@ -69,6 +69,8 @@ Prefer user-data destinations for your own presets so they carry over when you u
 
 **Auto Detect** chooses destinations for recognized content. Follow any prompts or error messages if an import cannot be identified.
 
+Folders and ZIPs containing `.zgeproj` objects suggest **ZGameEditor objects (.zgeproj)** in the import summary. Their internal folders, images, and other companion assets stay together. Packages with incompatible primary content require a compatible destination instead.
+
 Drop a complete folder or ZIP when presets or scripts need companion files such as samples, helpers, or images. To keep a package together in one place, select a destination before dropping it. Project ZIPs can be kept as ZIP files when offered.
 
 For scores and MIDI files, choose an existing Scores subfolder or create one when prompted.
